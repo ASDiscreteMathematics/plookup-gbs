@@ -104,9 +104,9 @@ def find_decomposition_opt(number, v, max_d, pre_list):
                     return maybe_res
     return None
 
-def findDecBest(number, num_sboxes, max_d, min_ν):
+def findDecBest(number, num_sboxes, max_d, desired_v):
     avg_sbox_size = math.floor(math.pow(number, 1/num_sboxes))
-    min_v = max(avg_sbox_size - 33, 4)
+    min_v = max(avg_sbox_size - 33, 4) # magic numbers from original reference code
     max_v = max(avg_sbox_size - 25, 6)
     for v in range(min_v, max_v):
         # print(f"number: {number} num sboxes: {num_sboxes} approx size: {avg_sbox_size} v: {v} max_d: {max_d}")
@@ -114,7 +114,7 @@ def findDecBest(number, num_sboxes, max_d, min_ν):
         if res and len(res):
             res = res[1::2]
             min_dec = min(decompose(number, res))
-            if min_dec > min_ν:
+            if min_dec > desired_v:
                 ν = previous_prime(min_dec + 1)
                 return ν, res
     return None
@@ -240,8 +240,8 @@ def bar_poly_system(order, decomposition, ν, s_box=small_s_box):
         uni_ring = GF(order)[x_i]
         system += [q_i_min.subs({x:x_i}) * interval_polynomial(x_i, s_min-1, s_i-1)] # ensure x_i < s_i
         system += [ring(uni_ring.lagrange_polynomial(s_box_points[:s_i])) - y_i] # interpolate the S-Box
-    # Additional constraints
-    system += [variables[0] - variables[num_vars//2]]
+    # Additional constraints – you might need to set variable 'testing' to False down below!
+    # system += [variables[0] - variables[num_vars//2]] # Bar(x) == x
     return system
 
 from sage.rings.polynomial.toy_buchberger import spol
@@ -304,7 +304,7 @@ if __name__ == "__main__":
     set_verbose(1)
     testing = True
     time_it = True
-    box_typ = ['default', 'random', 'iden'][2]
+    box_type = ['default', 'random', 'iden'][1]
 
     # Proposed by Dmitry 2021-02-04
     prime_dec_list = [
@@ -329,8 +329,8 @@ if __name__ == "__main__":
         print(f"————————————————————————————")
         print(f"p = {prime}, ν = {ν}, sboxes = {sboxes}")
         s_box, f = small_s_box, f"x^(ν-2) % ν"
-        if box_typ == 'random': s_box, f = random_s_box(ν, degree=ν, terms=2*ν)
-        elif box_typ == 'iden': s_box, f = (lambda x, ν: x, 1)
+        if box_type == 'random': s_box, f = random_s_box(ν, degree=ν, terms=2*ν)
+        elif box_type == 'iden': s_box, f = (lambda x, ν: x, 1)
         if get_verbose() >= 2:
             print(f"f in sbox = {f}")
         time_sys_start = process_time()
@@ -342,9 +342,9 @@ if __name__ == "__main__":
             print(f"——————————————")
         if testing:
             tmp = reduce(operator.mul, sboxes, 1)
-            assert tmp > prime, f"[!] S-Boxes too restrictive: {tmp} >= {prime}"
+            assert tmp >= prime, f"[!] S-Boxes too restrictive: {tmp} < {prime}"
             tmp = compose([ν]*len(sboxes), sboxes)
-            assert tmp < prime, f"[!] [v,…,v] is not in field – potential collisions: {tmp} >= {prime}"
+            assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
             assert all([x >= ν for x in decompose(prime, sboxes)])
             for inpu in [0, 1, prime-1] + [randint(1,prime-2) for _ in range(1000)]:
                 outp = bar([inpu], prime, sboxes, ν, s_box=s_box)[0]
