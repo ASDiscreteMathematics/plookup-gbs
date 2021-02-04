@@ -244,6 +244,19 @@ def bar_poly_system(order, decomposition, v, s_box=small_s_box):
     # system += [variables[0] - variables[num_vars//2]] # Bar(x) == x
     return system
 
+def bar_pow_bar_poly_system(order, decomposition, v, exponent=2, s_box=small_s_box):
+    num_s_boxes = len(decomposition)
+    num_vars = num_s_boxes*4 + 4 # twice of bar_poly_system: left half for first bar, right half for second bar
+    ring = PolynomialRing(GF(order), 'x', num_vars)
+    var = ring.gens()
+    shift_dict = {var[i] : var[i+num_vars//2] for i in range(num_vars//2)} # substitution shifts to right half of variables
+    bar_sys = bar_poly_system(order, decomposition, v, s_box=s_box)
+    system = [ring(poly) for poly in bar_sys]
+    system += [var[num_vars//4]^exponent - var[num_vars//2]] # Output of first Bar to the exp is input to second Bar
+    system += [ring(poly).subs(shift_dict) for poly in bar_sys]
+    return system
+
+
 from sage.rings.polynomial.toy_buchberger import spol
 def is_groebner_basis(gb):
     for f in gb:
@@ -301,8 +314,8 @@ def test_sboxes_too_tight_collision():
 
 
 if __name__ == "__main__":
-    set_verbose(1)
-    testing = True
+    set_verbose(3)
+    testing = False
     time_it = True
     box_type = ['default', 'random', 'iden'][1]
 
@@ -334,7 +347,7 @@ if __name__ == "__main__":
         if get_verbose() >= 2:
             print(f"f in sbox = {f}")
         time_sys_start = process_time()
-        system = bar_poly_system(prime, sboxes, v, s_box=s_box)
+        system = bar_pow_bar_poly_system(prime, sboxes, v, s_box=s_box)
         time_sys_stop = process_time()
         if get_verbose() >= 3:
             print(f"——————————————")
