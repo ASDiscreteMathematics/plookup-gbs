@@ -317,7 +317,7 @@ if __name__ == "__main__":
     set_verbose(3)
     testing = False
     time_it = True
-    box_type = ['default', 'random', 'iden'][1]
+    box_type = ['default', 'random', 'iden'][2]
 
     # Proposed by Dmitry 2021-02-04
     prime_dec_list = [
@@ -335,7 +335,10 @@ if __name__ == "__main__":
         (210906087421, 179, [184, 184, 184, 184, 184]),
     ]
     # Random generation of primes and their decompositions
-    prime_dec_list = generate_prime_list(base=10, lower_limit=3, upper_limit=5, min_v=0)
+    # prime_dec_list = generate_prime_list(base=10, lower_limit=2, upper_limit=5, min_v=0)
+
+    # parameters that kill Ferdinand's machine when using bar_pow_bar
+    prime_dec_list = [ (5701, 53, [84, 68]) ]
 
 
     for prime, v, sboxes in prime_dec_list:
