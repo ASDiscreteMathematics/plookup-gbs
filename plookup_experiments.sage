@@ -12,9 +12,9 @@ def decompose(x, sboxes):
         x = (x - dec[k]) // sboxes[k]
     return dec
 
-def small_s_box(x, ν):
-    if x < ν:
-        return (x**(ν-2)) % ν
+def small_s_box(x, v):
+    if x < v:
+        return (x**(v-2)) % v
     return x
 
 def compose(dec, sboxes):
@@ -25,14 +25,14 @@ def compose(dec, sboxes):
         x += dec[i]
     return x
 
-def bar_function(x, order, sboxes, ν, s_box=small_s_box):
+def bar_function(x, order, sboxes, v, s_box=small_s_box):
     x = decompose(x, sboxes)
-    x = [s_box(y, ν) for y in x]
+    x = [s_box(y, v) for y in x]
     x = compose(x, sboxes)
     return x % order
 
-def bar(state, order, sboxes, ν, s_box=small_s_box):
-    new_state = [bar_function(x, order, sboxes, ν, s_box=s_box) for x in state]
+def bar(state, order, sboxes, v, s_box=small_s_box):
+    new_state = [bar_function(x, order, sboxes, v, s_box=s_box) for x in state]
     return new_state
 
 def test_compose_decompose():
@@ -115,12 +115,12 @@ def findDecBest(number, num_sboxes, max_d, desired_v):
             res = res[1::2]
             min_dec = min(decompose(number, res))
             if min_dec > desired_v:
-                ν = previous_prime(min_dec + 1)
-                return ν, res
+                v = previous_prime(min_dec + 1)
+                return v, res
     return None
 
-def decomposeField(fieldSize, maxd, num_sboxes=27, min_ν=2):
-    return findDecBest(fieldSize, num_sboxes, maxd, min_ν)
+def decomposeField(fieldSize, maxd, num_sboxes=27, min_v=2):
+    return findDecBest(fieldSize, num_sboxes, maxd, min_v)
 
 def test_decomposeField():
     BLSr = 52435875175126190479447740508185965837690552500527637822603658699938581184513
@@ -129,13 +129,13 @@ def test_decomposeField():
     assert decomposeField(BN254,41) == [8, 651, 7, 658, 7, 656, 14, 666, 10, 663, 8, 654, 11, 668, 17, 677, 13, 681, 26, 683, 21, 669, 21, 681, 36, 680, 34, 677, 31, 675, 0, 668, 32, 675, 33, 683, 29, 681, 32, 683, 20, 683, 4, 655, 19, 680, 27, 683, 13, 667, 4, 678, 0, 673]
 # test_decomposeField()
 
-def generate_prime_list(base=10, lower_limit=5, upper_limit=16, min_ν=20):
+def generate_prime_list(base=10, lower_limit=5, upper_limit=16, min_v=20):
     prime_list = []
     for prime in [random_prime(base**(i+1), lbound=base**i) for i in range(lower_limit, upper_limit)]:
         max_d = 42
         num_sboxes = math.floor(math.log(prime, 10)) // 2
         num_sboxes = max(num_sboxes, 2)
-        res = decomposeField(prime, max_d, num_sboxes, min_ν)
+        res = decomposeField(prime, max_d, num_sboxes, min_v)
         v, dec, symbol = "– ", [], "-"
         if res:
             v, dec, symbol = *res, "+"
@@ -168,39 +168,39 @@ def test_interval_polynomial(p=17):
                 assert poly(j)
 # test_interval_polynomial()
 
-def invert_by_ν_poly(ring, ν):
-    assert ν < len(ring.base_ring())
-    points = [(i, (i^(ν-2)) % ν) for i in range(ν + 1)]
+def invert_by_v_poly(ring, v):
+    assert v < len(ring.base_ring())
+    points = [(i, (i^(v-2)) % v) for i in range(v + 1)]
     poly = ring.lagrange_polynomial(points)
     return poly
 
-def test_invert_by_ν_poly(p=17):
+def test_invert_by_v_poly(p=17):
     ring.<x> = GF(p)[]
-    for ν in primes(2,p):
-        poly = invert_by_ν_poly(ring, ν)
-        for j in [0, ν]:
-            assert int(poly(j))*int(j) % ν == 0
-        for j in range(1, ν):
-            assert int(poly(j))*int(j) % ν == 1
-# test_invert_by_ν_poly()
+    for v in primes(2,p):
+        poly = invert_by_v_poly(ring, v)
+        for j in [0, v]:
+            assert int(poly(j))*int(j) % v == 0
+        for j in range(1, v):
+            assert int(poly(j))*int(j) % v == 1
+# test_invert_by_v_poly()
 
-def maybe_invert_by_ν_poly(ring, ν, sbox):
-    points = [(i, (i^(ν-2)) % ν) for i in range(ν)]
-    points += [(i, i) for i in range(ν, sbox)]
+def maybe_invert_by_v_poly(ring, v, sbox):
+    points = [(i, (i^(v-2)) % v) for i in range(v)]
+    points += [(i, i) for i in range(v, sbox)]
     poly = ring.lagrange_polynomial(points)
     return poly
 
-def test_maybe_invert_by_ν_poly(p=17):
+def test_maybe_invert_by_v_poly(p=17):
     ring.<x> = GF(p)[]
-    for ν in primes(2,p):
-        poly = maybe_invert_by_ν_poly(ring, ν, p)
-        for j in [0, ν]:
-            assert int(poly(j))*int(j) % ν == 0
-        for j in range(1, ν):
-            assert int(poly(j))*int(j) % ν == 1
-        for j in range(ν, p):
+    for v in primes(2,p):
+        poly = maybe_invert_by_v_poly(ring, v, p)
+        for j in [0, v]:
+            assert int(poly(j))*int(j) % v == 0
+        for j in range(1, v):
+            assert int(poly(j))*int(j) % v == 1
+        for j in range(v, p):
             assert int(poly(j)) == j
-# test_maybe_invert_by_ν_poly()
+# test_maybe_invert_by_v_poly()
 
 def decomposition_poly(variables, decomposition):
     assert len(variables) == len(decomposition) + 1
@@ -220,7 +220,7 @@ def test_decomposition_poly():
             assert not poly(i, *dec)
 # test_decomposition_poly()
 
-def bar_poly_system(order, decomposition, ν, s_box=small_s_box):
+def bar_poly_system(order, decomposition, v, s_box=small_s_box):
     num_s_boxes = len(decomposition)
     num_vars = num_s_boxes*2 + 2
     ring = PolynomialRing(GF(order), 'x', num_vars)
@@ -232,7 +232,7 @@ def bar_poly_system(order, decomposition, ν, s_box=small_s_box):
     q_i_min = interval_polynomial(x, -1, s_min - 1)
     q_i_max = interval_polynomial(x, -1, s_max - 1)
     uni_ring = GF(order)[x] # lagrange interpolation only works in univariate rings in sage
-    s_box_points = [(i, s_box(i, ν)) for i in range(s_max)]
+    s_box_points = [(i, s_box(i, v)) for i in range(s_max)]
     for i in range(num_s_boxes):
         x_i = variables[i + 1]
         y_i = variables[i + 1 + num_s_boxes + 1]
@@ -265,33 +265,33 @@ def is_groebner_basis(gb):
 def random_s_box(field_size, degree = 5, terms = 15):
     ring.<x> = GF(field_size)[]
     f = ring.random_element(degree, terms)
-    s_box = lambda x, ν: int(f(x)) if x < ν else x
+    s_box = lambda x, v: int(f(x)) if x < v else x
     return s_box, f
 
 def test_sboxes_too_tight_collision():
-    for prime, ν, sboxes in prime_dec_list:
+    for prime, v, sboxes in prime_dec_list:
         assert reduce(operator.mul, sboxes, 1) > prime
-        assert compose([ν]*len(sboxes), sboxes) < prime
+        assert compose([v]*len(sboxes), sboxes) < prime
         lower = compose([s - 1 for s in sboxes[:-1]] + [0], sboxes)
         #col_candidates = compose([s - 1 for s in sboxes[:-1]] + [], sboxes)
         print(f" ————————————")
-        print(f"prime = {prime} ν = {ν} sboxes = {sboxes}")
+        print(f"prime = {prime} v = {v} sboxes = {sboxes}")
 
 
         my_list = map(operator.sub, decompose(prime, sboxes), [s - 1 for s in sboxes])
         i = next((i for i, x in enumerate(my_list) if x), None)
-        if i and decompose(prime, sboxes)[i] < ν:
+        if i and decompose(prime, sboxes)[i] < v:
             print(f"[-] predicting collisions")
         if lower < prime:
             print(f"[!] danger zone: {lower}")
         for i in range(prime - floor(log(prime,10)), prime):
-            permute = bar([i], prime, sboxes, ν)[0]
-            double_permute = bar([permute], prime, sboxes, ν )[0]
+            permute = bar([i], prime, sboxes, v)[0]
+            double_permute = bar([permute], prime, sboxes, v )[0]
             if i != double_permute:
                 print(f"[!!] collision: bar({i:>9}) == bar({double_permute:>4}) == {permute:>4}", end=" | ")
                 x = decompose(i, sboxes)
                 print(f"{i:>5} = {x}", end=" ")
-                x = [small_s_box(y, ν) for y in x]
+                x = [small_s_box(y, v) for y in x]
                 print(f"→ {x}", end=" ")
                 x = compose(x, sboxes)
                 print(f"→ {x}")
@@ -322,19 +322,19 @@ if __name__ == "__main__":
         (210906087421, 179, [184, 184, 184, 184, 184]),
     ]
     # Random generation of primes and their decompositions
-    prime_dec_list = generate_prime_list(base=10, lower_limit=3, upper_limit=5, min_ν=0)
+    prime_dec_list = generate_prime_list(base=10, lower_limit=3, upper_limit=5, min_v=0)
 
 
-    for prime, ν, sboxes in prime_dec_list:
+    for prime, v, sboxes in prime_dec_list:
         print(f"————————————————————————————")
-        print(f"p = {prime}, ν = {ν}, sboxes = {sboxes}")
-        s_box, f = small_s_box, f"x^(ν-2) % ν"
-        if box_type == 'random': s_box, f = random_s_box(ν, degree=ν, terms=2*ν)
-        elif box_type == 'iden': s_box, f = (lambda x, ν: x, 1)
+        print(f"p = {prime}, v = {v}, sboxes = {sboxes}")
+        s_box, f = small_s_box, f"x^(v-2) % v"
+        if box_type == 'random': s_box, f = random_s_box(v, degree=v, terms=2*v)
+        elif box_type == 'iden': s_box, f = (lambda x, v: x, 1)
         if get_verbose() >= 2:
             print(f"f in sbox = {f}")
         time_sys_start = process_time()
-        system = bar_poly_system(prime, sboxes, ν, s_box=s_box)
+        system = bar_poly_system(prime, sboxes, v, s_box=s_box)
         time_sys_stop = process_time()
         if get_verbose() >= 3:
             print(f"——————————————")
@@ -343,20 +343,20 @@ if __name__ == "__main__":
         if testing:
             tmp = reduce(operator.mul, sboxes, 1)
             assert tmp >= prime, f"[!] S-Boxes too restrictive: {tmp} < {prime}"
-            tmp = compose([ν]*len(sboxes), sboxes)
+            tmp = compose([v]*len(sboxes), sboxes)
             assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
-            assert all([x >= ν for x in decompose(prime, sboxes)])
+            assert all([x >= v for x in decompose(prime, sboxes)])
             for inpu in [0, 1, prime-1] + [randint(1,prime-2) for _ in range(1000)]:
-                outp = bar([inpu], prime, sboxes, ν, s_box=s_box)[0]
+                outp = bar([inpu], prime, sboxes, v, s_box=s_box)[0]
                 inpu_dec = decompose(inpu, sboxes)
                 outp_dec = decompose(outp, sboxes)
                 check = [poly(inpu, *inpu_dec, outp, *outp_dec) for poly in system]
                 if any(check):
-                    print(f"prime: {prime} ν: {ν} sboxes: {sboxes}")
+                    print(f"prime: {prime} v: {v} sboxes: {sboxes}")
                     print(f"input:  {inpu}")
                     x = decompose(inpu, sboxes)
                     print(f"  decomp: {x}")
-                    x = [small_s_box(y, ν) for y in x]
+                    x = [small_s_box(y, v) for y in x]
                     print(f"     inv: {x}")
                     x = compose(x, sboxes)
                     print(f"    comp: {x}")
