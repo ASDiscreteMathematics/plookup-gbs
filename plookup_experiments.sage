@@ -4,61 +4,110 @@
 import random
 from time import process_time
 
-def decompose(x, sboxes):
-    t = len(sboxes)
-    dec = [0]*t
-    for k in range(t-1, -1, -1):
-        dec[k] = x % sboxes[k]
-        x = (x - dec[k]) // sboxes[k]
-    return dec
+class PlookupHash():
+    def __init__(self, order, constants, matrix, sboxes, v, s_box_f=None):
+        self.order = order
+        self.constants = constants
+        self.matrix = matrix
+        self.sboxes = sboxes
+        self.v = v
+        self.s_box_f = s_box_f
+        if not s_box_f:
+            self.s_box_f = lambda x : (x**(v-2)) % v
 
-def small_s_box(x, v):
-    if x < v:
-        return (x**(v-2)) % v
-    return x
+    def __call__(self, state):
+        brick, concrete, bar = self.brick, self.concrete, self.bar
+        state = concrete(state, 0)
+        state = brick(state)
+        state = concrete(state, 1)
+        state = brick(state)
+        state = concrete(state, 2)
+        state = bar(state)
+        state = concrete(state, 3)
+        state = brick(state)
+        state = concrete(state, 4)
+        state = brick(state)
+        state = concrete(state, 5)
+        return state
 
-def compose(dec, sboxes):
-    t = len(sboxes)
-    x = 0
-    for i in range(t):
-        x *= sboxes[i]
-        x += dec[i]
-    return x
+    def _compose(self, dec):
+        sboxes = self.sboxes
+        t = len(sboxes)
+        x = 0
+        for i in range(t):
+            x *= sboxes[i]
+            x += dec[i]
+        return x
 
-def bar_function(x, order, sboxes, v, s_box=small_s_box):
-    x = decompose(x, sboxes)
-    x = [s_box(y, v) for y in x]
-    x = compose(x, sboxes)
-    return x % order
+    def _decompose(self, x):
+        sboxes = self.sboxes
+        t = len(sboxes)
+        dec = [0]*t
+        for k in range(t-1, -1, -1):
+            dec[k] = x % sboxes[k]
+            x = (x - dec[k]) // sboxes[k]
+        return dec
 
-def bar(state, order, sboxes, v, s_box=small_s_box):
-    new_state = [bar_function(x, order, sboxes, v, s_box=s_box) for x in state]
-    return new_state
+    def _small_s_box(self, x):
+        if x < self.v:
+            return self.s_box_f(x)
+        return x
 
-def test_compose_decompose():
-    for sboxes in [[10,10,10], [4,5,6], [11,3,17,53]]:
-        for i in range(reduce(operator.mul, sboxes, 1)):
-            assert i == compose(decompose(i, sboxes), sboxes)
-test_compose_decompose()
+    def _bar_function(self, x):
+        order = self.order
+        sboxes = self.sboxes
+        compose = self._compose
+        decompose = self._decompose
+        s_box = self._small_s_box
+        v = self.v
+        x = decompose(x)
+        x = [s_box(y) for y in x]
+        x = compose(x)
+        return x % order
 
-def test_bar():
-    assert bar([12, 123, 456, 789], 1009, [10, 10, 10], 7) == [14, 145, 236, 789]
-    assert bar([36, 37, 38, 41, 64001, 18, 1618], 70657, [40, 40, 40], 37) == [36, 37, 38, 41, 1, 35, 1635]
-# test_bar()
+    def bar(self, state):
+        order = self.order
+        sboxes = self.sboxes
+        v = self.v
+        new_state = [self._bar_function(x) for x in state]
+        return new_state
 
-def bricks(state, order):
-    x, y, z = state
-    a = z**5 % order
-    b = x*(z**2 + 1*z + 2) % order
-    c = y*(x**2 + 3*x + 4) % order
-    return [a, b, c]
+    def brick(self, state):
+        order = self.order
+        x, y, z = state
+        a = z**5 % order
+        b = x*(z**2 + 1*z + 2) % order
+        c = y*(x**2 + 3*x + 4) % order
+        return [a, b, c]
 
-def concrete(state, order, matrix, constants):
-    new_state = constants   #initialize with constant vector
-    for i in range(len(state)):  #matrix multiplication
-        for j in range(len(state)):
-            new_state[i] += matrix[i][j]*state[j] % order
-    return new_state
+    def concrete(self, state, cnst_idx):
+        order = self.order
+        matrix = self.matrix
+        new_state = self.constants[cnst_idx] #initialize with constant vector
+        for i in range(len(state)):  #matrix multiplication
+            for j in range(len(state)):
+                new_state[i] += matrix[i][j]*state[j] % order
+        return new_state
+
+class TestPlookupHash():
+    def __init__(self):
+        self._test_compose_decompose()
+        self._test_bar()
+        if get_verbose() >= 2: print("Testing of PlookupHash completed.")
+
+    def _test_compose_decompose(self):
+        _ = None
+        for sboxes in [[10,10,10], [4,5,6], [11,3,17,53]]:
+            ph = PlookupHash(_, _, _, sboxes, _)
+            for i in range(reduce(operator.mul, sboxes, 1)):
+                assert i == ph._compose(ph._decompose(i))
+
+    def _test_bar(self):
+        _ = None
+        ph = PlookupHash(1009, _, _, [10, 10, 10], 7)
+        assert ph.bar([12, 123, 456, 789]) == [14, 145, 236, 789]
+        ph = PlookupHash(70657, _, _, [40, 40, 40], 37)
+        assert ph.bar([36, 37, 38, 41, 64001, 18, 1618]) == [36, 37, 38, 41, 1, 35, 1635]
 
 def miller_rabin(n, k):
     # If number is even, it's a composite number
@@ -234,7 +283,7 @@ def test_decomposition_poly():
             assert not poly(i, *dec)
 # test_decomposition_poly()
 
-def bar_poly_system(order, decomposition, v, s_box=small_s_box):
+def bar_poly_system(order, decomposition, s_box):
     num_s_boxes = len(decomposition)
     num_vars = num_s_boxes*2 + 2
     ring = PolynomialRing(GF(order), 'x', num_vars)
@@ -246,7 +295,7 @@ def bar_poly_system(order, decomposition, v, s_box=small_s_box):
     q_i_min = interval_polynomial(x, -1, s_min - 1)
     q_i_max = interval_polynomial(x, -1, s_max - 1)
     uni_ring = GF(order)[x] # lagrange interpolation only works in univariate rings in sage
-    s_box_points = [(i, s_box(i, v)) for i in range(s_max)]
+    s_box_points = [(i, s_box(i)) for i in range(s_max)]
     for i in range(num_s_boxes):
         x_i = variables[i + 1]
         y_i = variables[i + 1 + num_s_boxes + 1]
@@ -258,19 +307,19 @@ def bar_poly_system(order, decomposition, v, s_box=small_s_box):
     # system += [variables[0] - variables[num_vars//2]] # Bar(x) == x
     return system
 
-def bar_pow_bar_poly_system(order, decomposition, v, exponent=2, s_box=small_s_box):
+def bar_pow_bar_poly_system(order, decomposition, s_box, exponent=5):
     num_s_boxes = len(decomposition)
     num_vars = num_s_boxes*4 + 4 # twice of bar_poly_system: left half for first bar, right half for second bar
     ring = PolynomialRing(GF(order), 'x', num_vars)
     var = ring.gens()
     shift_dict = {var[i] : var[i+num_vars//2] for i in range(num_vars//2)} # substitution shifts to right half of variables
-    bar_sys = bar_poly_system(order, decomposition, v, s_box=s_box)
+    bar_sys = bar_poly_system(order, decomposition, s_box)
     system = [ring(poly) for poly in bar_sys]
     system += [var[num_vars//4]^exponent - var[num_vars//2]] # Output of first Bar to the exp is input to second Bar
     system += [ring(poly).subs(shift_dict) for poly in bar_sys]
     return system
 
-def lbar_pow_rbar_poly_system(order, decomposition, v, exponent=5, s_box=small_s_box):
+def lbar_pow_rbar_poly_system(order, decomposition, s_box, exponent=5):
     num_s_boxes = len(decomposition)
     num_l_sboxes = num_s_boxes//2
     num_r_sboxes = num_s_boxes - num_l_sboxes
@@ -283,8 +332,8 @@ def lbar_pow_rbar_poly_system(order, decomposition, v, exponent=5, s_box=small_s
     print(shift_dict)
     r_big_box = reduce(operator.mul, decomposition[num_l_sboxes:], 1)
     l_big_box = reduce(operator.mul, decomposition[:num_l_sboxes], 1)
-    up_sys = bar_poly_system(order, decomposition[:num_l_sboxes] + [r_big_box], v, s_box=s_box)
-    lo_sys = bar_poly_system(order, [l_big_box] + decomposition[num_l_sboxes:], v, s_box=s_box)
+    up_sys = bar_poly_system(order, decomposition[:num_l_sboxes] + [r_big_box], s_box)
+    lo_sys = bar_poly_system(order, [l_big_box] + decomposition[num_l_sboxes:], s_box)
     system = [ring(poly) for poly in up_sys]
     system += [var[num_l_vars//2]^exponent - var[num_l_vars]] # Output of first Bar to the exp is input to second Bar
     system += [ring(poly).subs(shift_dict) for poly in lo_sys]
@@ -309,49 +358,17 @@ def is_groebner_basis(gb):
                 assert False
     return True
 
-def random_s_box(field_size, degree = 5, terms = 15):
+def random_s_box_f(field_size, degree=5, terms=15):
     ring.<x> = GF(field_size)[]
     f = ring.random_element(degree, terms)
-    s_box = lambda x, v: int(f(x)) if x < v else x
-    return s_box, f
-
-def test_sboxes_too_tight_collision():
-    for prime, v, sboxes in prime_dec_list:
-        assert reduce(operator.mul, sboxes, 1) > prime
-        assert compose([v]*len(sboxes), sboxes) < prime
-        lower = compose([s - 1 for s in sboxes[:-1]] + [0], sboxes)
-        #col_candidates = compose([s - 1 for s in sboxes[:-1]] + [], sboxes)
-        print(f" ————————————")
-        print(f"prime = {prime} v = {v} sboxes = {sboxes}")
-
-
-        my_list = map(operator.sub, decompose(prime, sboxes), [s - 1 for s in sboxes])
-        i = next((i for i, x in enumerate(my_list) if x), None)
-        if i and decompose(prime, sboxes)[i] < v:
-            print(f"[-] predicting collisions")
-        if lower < prime:
-            print(f"[!] danger zone: {lower}")
-        for i in range(prime - floor(log(prime,10)), prime):
-            permute = bar([i], prime, sboxes, v)[0]
-            double_permute = bar([permute], prime, sboxes, v )[0]
-            if i != double_permute:
-                print(f"[!!] collision: bar({i:>9}) == bar({double_permute:>4}) == {permute:>4}", end=" | ")
-                x = decompose(i, sboxes)
-                print(f"{i:>5} = {x}", end=" ")
-                x = [small_s_box(y, v) for y in x]
-                print(f"→ {x}", end=" ")
-                x = compose(x, sboxes)
-                print(f"→ {x}")
-        print(f" ————————————")
-        print(f"")
-# test_sboxes_too_tight_collision()
-
+    s_box_f = lambda x: int(f(x))
+    return s_box_f, f
 
 if __name__ == "__main__":
     set_verbose(3)
     testing = False
     time_it = True
-    box_type = ['default', 'random', 'iden'][2]
+    box_type = ['default', 'random', 'iden'][0]
 
     # Proposed by Dmitry 2021-02-04
     prime_dec_list = [
@@ -374,44 +391,59 @@ if __name__ == "__main__":
     # parameters that kill Ferdinand's machine when using bar_pow_bar
     prime_dec_list = [ (5701, 53, [84, 68]) ]
 
+    constants = [
+        [3**100, 2**100, 5**50],
+        [3**110, 2**110, 5**60],
+        [3**120, 2**120, 5**70],
+        [3**130, 2**130, 5**80],
+        [3**140, 2**140, 5**90],
+        [3**150, 2**150, 5**100],
+    ]
+    matrix = [
+        [2, 1, 1],
+        [1, 2, 1],
+        [1, 1, 2],
+    ]
 
     for prime, v, sboxes in prime_dec_list:
         print(f"————————————————————————————")
         print(f"p = {prime}, v = {v}, sboxes = {sboxes}")
-        s_box, f = small_s_box, f"x^(v-2) % v"
-        if box_type == 'random': s_box, f = random_s_box(v, degree=v, terms=2*v)
-        elif box_type == 'iden': s_box, f = (lambda x, v: x, 'ID')
+        s_box_f, f = None, f"x^(v-2) % v"
+        if box_type == 'random': s_box_f, f = random_s_box_f(v, degree=v, terms=2*v)
+        elif box_type == 'iden': s_box_f, f = (lambda x: x, 'ID')
         if get_verbose() >= 2:
             print(f"f in sbox = {f}")
+        ph = PlookupHash(prime, constants, matrix, sboxes, v, s_box_f=s_box_f)
         time_sys_start = process_time()
-        system = bar_pow_bar_poly_system(prime, sboxes, v, s_box=s_box)
+        system = bar_poly_system(prime, sboxes, ph._small_s_box)
         time_sys_stop = process_time()
         if get_verbose() >= 3:
             print(f"——————————————")
             [print(f"{poly}") for poly in system]
             print(f"——————————————")
         if testing:
+            TestPlookupHash()
             tmp = reduce(operator.mul, sboxes, 1)
             assert tmp >= prime, f"[!] S-Boxes too restrictive: {tmp} < {prime}"
-            tmp = compose([v]*len(sboxes), sboxes)
+            tmp = ph._compose([v]*len(sboxes))
             assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
-            assert all([x >= v for x in decompose(prime, sboxes)])
+            assert all([x >= v for x in ph._decompose(prime)])
             for inpu in [0, 1, prime-1] + [randint(1,prime-2) for _ in range(1000)]:
-                outp = bar([inpu], prime, sboxes, v, s_box=s_box)[0]
-                inpu_dec = decompose(inpu, sboxes)
-                outp_dec = decompose(outp, sboxes)
+                outp = ph.bar([inpu])[0]
+                inpu_dec = ph._decompose(inpu)
+                outp_dec = ph._decompose(outp)
                 check = [poly(inpu, *inpu_dec, outp, *outp_dec) for poly in system]
                 if any(check):
                     print(f"prime: {prime} v: {v} sboxes: {sboxes}")
                     print(f"input:  {inpu}")
-                    x = decompose(inpu, sboxes)
+                    x = ph._decompose(inpu)
                     print(f"  decomp: {x}")
-                    x = [small_s_box(y, v) for y in x]
+                    x = [ph._small_s_box(y) for y in x]
                     print(f"     inv: {x}")
-                    x = compose(x, sboxes)
+                    x = ph._compose(x)
                     print(f"    comp: {x}")
                     print(f"output: {outp}")
-                    print(f"  decomp:  {decompose(outp, sboxes)}")
+                    print(f"  decomp:  {ph._decompose(outp)}")
                     print(f"polys:  {check}")
                     assert False
         if time_it:
