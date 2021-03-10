@@ -290,7 +290,7 @@ def bar_poly_system(order, decomposition, s_box):
     x = variables[0]
     system =  [decomposition_poly(variables[:num_vars//2], decomposition)] # x and x_i correspond
     system += [decomposition_poly(variables[num_vars//2:], decomposition)] # y and y_i correspond
-    s_min, s_max = min(sboxes), max(sboxes)
+    s_min, s_max = min(decomposition), max(decomposition)
     q_i_min = interval_polynomial(x, -1, s_min - 1)
     q_i_max = interval_polynomial(x, -1, s_max - 1)
     uni_ring = GF(order)[x] # lagrange interpolation only works in univariate rings in sage
