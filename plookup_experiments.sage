@@ -328,6 +328,56 @@ def test_conc_poly_system():
             vals += ph.concrete(vals, i)
             assert not any([p(vals) for p in polys])
 test_conc_poly_system()
+
+def conc_bar_conc_poly_system(order, constants, mult_matrix, decomposition, s_box):
+    assert len(constants) >= 2, f"Multiple 'concrete' require multiple lists of constants"
+    assert len(constants[0]) == len(constants[1]), f"The lists of constants have to have the same length"
+    assert len(constants[0]) == mult_matrix.nrows(), f"Dimensions of constants and matrix mismatch: {len(constants)} vs {mult_matrix.nrows()}"
+    num_s_boxes = len(decomposition)
+    state_size = len(constants[0])
+    num_vars = 2*state_size + state_size*(num_s_boxes*2 + 1) + state_size
+    ring = PolynomialRing(GF(order), 'x', num_vars)
+    var = ring.gens()
+    all_shift_dict_bar = []
+    for s in range(state_size):
+        shift_dict_bar = {var[0] : var[state_size + s]} # output of concrete is input of bar
+        shift_dict_bar.update( {var[i] : var[i + 2*state_size + s*(num_s_boxes*2 + 1) - 1] for i in range(1, num_s_boxes*2 + 2)} ) # take next free variables
+        all_shift_dict_bar += [shift_dict_bar]
+    shift_dict_conc = {var[i] : var[2*state_size + i*(num_s_boxes*2 + 1) + num_s_boxes] for i in range(state_size)} # collect the y's from the bars
+    shift_dict_conc.update( {var[i] : var[i + 2*state_size + state_size*(num_s_boxes*2 + 1) - state_size] for i in range(state_size, 2*state_size)} )
+    conc_sys_0 = conc_poly_system(order, constants[0], mult_matrix)
+    bar_sys = bar_poly_system(order, decomposition, s_box)
+    conc_sys_1 = conc_poly_system(order, constants[1], mult_matrix)
+    system = [ring(p) for p in conc_sys_0]
+    for shift_dict_bar in all_shift_dict_bar:
+        system += [ring(p).subs(shift_dict_bar) for p in bar_sys]
+    system += [ring(p).subs(shift_dict_conc) for p in conc_sys_1]
+    return system
+
+def test_conc_bar_conc_poly_system():
+    prime = 5701
+    constants = [[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]]
+    constants = [[c % prime for c in cnts] for cnts in constants]
+    mult_matrix = matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]])
+    s_boxes = [84, 68]
+    v = 53
+    ph = PlookupHash(prime, constants, mult_matrix, s_boxes, v)
+    polys = conc_bar_conc_poly_system(prime, constants, mult_matrix, s_boxes, ph._small_s_box)
+    for _ in range(100):
+        state_0 = [randint(0, prime), randint(0, prime), randint(0, prime)]
+        state_1 = ph.concrete(state_0, 0)
+        state_2 = ph.bar(state_1)
+        state_3 = ph.concrete(state_2, 1)
+        vals = state_0 + state_1
+        for i in range(3): # all the bars
+            vals += ph._decompose(state_1[i])
+            vals += [state_2[i]]
+            vals += ph._decompose(state_2[i])
+        vals += state_3
+        assert not any([p(vals) for p in polys])
+test_conc_bar_conc_poly_system()
+
+
 def bar_pow_bar_poly_system(order, decomposition, s_box, exponent=5):
     num_s_boxes = len(decomposition)
     num_vars = num_s_boxes*4 + 4 # twice of bar_poly_system: left half for first bar, right half for second bar
