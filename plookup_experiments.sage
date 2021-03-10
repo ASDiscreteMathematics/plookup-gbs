@@ -346,7 +346,7 @@ if __name__ == "__main__":
         print(f"p = {prime}, v = {v}, sboxes = {sboxes}")
         s_box, f = small_s_box, f"x^(v-2) % v"
         if box_type == 'random': s_box, f = random_s_box(v, degree=v, terms=2*v)
-        elif box_type == 'iden': s_box, f = (lambda x, v: x, 1)
+        elif box_type == 'iden': s_box, f = (lambda x, v: x, 'ID')
         if get_verbose() >= 2:
             print(f"f in sbox = {f}")
         time_sys_start = process_time()
