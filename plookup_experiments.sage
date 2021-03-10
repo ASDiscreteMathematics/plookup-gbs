@@ -46,6 +46,20 @@ def test_bar():
     assert bar([36, 37, 38, 41, 64001, 18, 1618], 70657, [40, 40, 40], 37) == [36, 37, 38, 41, 1, 35, 1635]
 # test_bar()
 
+def bricks(state, order):
+    x, y, z = state
+    a = z**5 % order
+    b = x*(z**2 + 1*z + 2) % order
+    c = y*(x**2 + 3*x + 4) % order
+    return [a, b, c]
+
+def concrete(state, order, matrix, constants):
+    new_state = constants   #initialize with constant vector
+    for i in range(len(state)):  #matrix multiplication
+        for j in range(len(state)):
+            new_state[i] += matrix[i][j]*state[j] % order
+    return new_state
+
 def miller_rabin(n, k):
     # If number is even, it's a composite number
     if n == 2: return True
