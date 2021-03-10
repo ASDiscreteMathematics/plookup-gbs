@@ -256,6 +256,26 @@ def bar_pow_bar_poly_system(order, decomposition, v, exponent=2, s_box=small_s_b
     system += [ring(poly).subs(shift_dict) for poly in bar_sys]
     return system
 
+def lbar_pow_rbar_poly_system(order, decomposition, v, exponent=5, s_box=small_s_box):
+    num_s_boxes = len(decomposition)
+    num_l_sboxes = num_s_boxes//2
+    num_r_sboxes = num_s_boxes - num_l_sboxes
+    num_l_vars = (num_l_sboxes + 2) * 2
+    num_r_vars = (num_r_sboxes + 2) * 2
+    num_vars = num_l_vars + num_r_vars
+    ring = PolynomialRing(GF(order), 'x', num_vars)
+    var = ring.gens()
+    shift_dict = {var[i] : var[i+num_r_vars] for i in range(num_r_vars)} # substitution shifts to right “half” of variables
+    print(shift_dict)
+    r_big_box = reduce(operator.mul, decomposition[num_l_sboxes:], 1)
+    l_big_box = reduce(operator.mul, decomposition[:num_l_sboxes], 1)
+    up_sys = bar_poly_system(order, decomposition[:num_l_sboxes] + [r_big_box], v, s_box=s_box)
+    lo_sys = bar_poly_system(order, [l_big_box] + decomposition[num_l_sboxes:], v, s_box=s_box)
+    system = [ring(poly) for poly in up_sys]
+    system += [var[num_l_vars//2]^exponent - var[num_l_vars]] # Output of first Bar to the exp is input to second Bar
+    system += [ring(poly).subs(shift_dict) for poly in lo_sys]
+    return system
+
 
 from sage.rings.polynomial.toy_buchberger import spol
 def is_groebner_basis(gb):
