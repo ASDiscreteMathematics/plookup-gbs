@@ -306,6 +306,28 @@ def bar_poly_system(order, decomposition, s_box):
     # system += [variables[0] - variables[num_vars//2]] # Bar(x) == x
     return system
 
+def conc_poly_system(order, constants, mult_matrix):
+    assert len(constants) == mult_matrix.nrows(), f"Dimensions of constants and matrix mismatch: {len(constants)} vs {mult_matrix.nrows()}"
+    state_size = len(constants)
+    ring = PolynomialRing(GF(order), 'x', 2*state_size)
+    var = ring.gens() # in_0, …, in_{s-1}, out_0, …, out_{s-1}
+    invars = vector(var[:state_size])
+    polys = [ constants[i] + mult_matrix[i]*invars - var[i+state_size] for i in range(state_size)]
+    return polys
+
+def test_conc_poly_system():
+    prime = 5701
+    constants = [[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]]
+    constants = [[c % prime for c in cnts] for cnts in constants]
+    mult_matrix = matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]])
+    ph = PlookupHash(prime, constants, mult_matrix, [84, 68], 53)
+    for i in range(len(constants)):
+        polys = conc_poly_system(prime, constants[i], mult_matrix)
+        for _ in range(100):
+            vals = [randint(0, prime), randint(0, prime), randint(0, prime)]
+            vals += ph.concrete(vals, i)
+            assert not any([p(vals) for p in polys])
+test_conc_poly_system()
 def bar_pow_bar_poly_system(order, decomposition, s_box, exponent=5):
     num_s_boxes = len(decomposition)
     num_vars = num_s_boxes*4 + 4 # twice of bar_poly_system: left half for first bar, right half for second bar
