@@ -5,10 +5,10 @@ import random
 from time import process_time
 
 class PlookupHash():
-    def __init__(self, order, constants, matrix, sboxes, v, s_box_f=None):
+    def __init__(self, order, constants, mult_matrix, sboxes, v, s_box_f=None):
         self.order = order
-        self.constants = constants
-        self.matrix = matrix
+        self.constants = matrix(constants)
+        self.matrix = matrix(mult_matrix)
         self.sboxes = sboxes
         self.v = v
         self.s_box_f = s_box_f
@@ -83,10 +83,9 @@ class PlookupHash():
     def concrete(self, state, cnst_idx):
         order = self.order
         matrix = self.matrix
-        new_state = self.constants[cnst_idx] #initialize with constant vector
-        for i in range(len(state)):  #matrix multiplication
-            for j in range(len(state)):
-                new_state[i] += matrix[i][j]*state[j] % order
+        new_state = vector(self.constants[cnst_idx])
+        new_state += matrix * vector(state)
+        new_state = [s % order for s in new_state]
         return new_state
 
 class TestPlookupHash():
@@ -365,7 +364,7 @@ def random_s_box_f(field_size, degree=5, terms=15):
     return s_box_f, f
 
 if __name__ == "__main__":
-    set_verbose(3)
+    set_verbose(2)
     testing = False
     time_it = True
     box_type = ['default', 'random', 'iden'][0]
@@ -399,7 +398,7 @@ if __name__ == "__main__":
         [3**140, 2**140, 5**90],
         [3**150, 2**150, 5**100],
     ]
-    matrix = [
+    mult_matrix = [
         [2, 1, 1],
         [1, 2, 1],
         [1, 1, 2],
@@ -413,7 +412,7 @@ if __name__ == "__main__":
         elif box_type == 'iden': s_box_f, f = (lambda x: x, 'ID')
         if get_verbose() >= 2:
             print(f"f in sbox = {f}")
-        ph = PlookupHash(prime, constants, matrix, sboxes, v, s_box_f=s_box_f)
+        ph = PlookupHash(prime, constants, mult_matrix, sboxes, v, s_box_f=s_box_f)
         time_sys_start = process_time()
         system = bar_poly_system(prime, sboxes, ph._small_s_box)
         time_sys_stop = process_time()
