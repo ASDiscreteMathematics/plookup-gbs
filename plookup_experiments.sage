@@ -488,7 +488,6 @@ def random_s_box_f(field_size, degree=5, terms=15):
 if __name__ == "__main__":
     set_verbose(2)
     testing = 2
-    time_it = True
     box_type = ['default', 'random', 'iden'][0]
 
     # Proposed by Dmitry 2021-02-04
@@ -560,8 +559,7 @@ if __name__ == "__main__":
             tmp = ph._compose([v]*len(sboxes))
             assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
             assert all([x >= v for x in ph._decompose(prime)])
-        if time_it:
-            print(f"time system:    {float(n(time_sys_stop - time_sys_start, digits=5)):>8.5} sec")
+        print(f"time system:    {float(n(time_sys_stop - time_sys_start, digits=5)):>8.5} sec")
         print(f"polys deg's:    {[poly.degree() for poly in system]}")
         print(f"macaulay bound: {1 + sum([poly.degree() - 1 for poly in system])}")
         print(f"estimated dreg: {floor(2*len(sboxes)*prime**(1/len(sboxes)))}")
