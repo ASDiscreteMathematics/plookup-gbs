@@ -92,7 +92,7 @@ class TestPlookupHash():
     def __init__(self):
         self._test_compose_decompose()
         self._test_bar()
-        if get_verbose() >= 2: print("Testing of PlookupHash completed.")
+        if get_verbose() >= 2: print("Testing of PlookupHash complete.")
 
     def _test_compose_decompose(self):
         _ = None
@@ -167,6 +167,7 @@ def find_decomposition_opt(number, v, max_d, pre_list):
     return None
 
 def findDecBest(number, num_sboxes, max_d, desired_v):
+    _ = None
     avg_sbox_size = math.floor(math.pow(number, 1/num_sboxes))
     min_v = max(avg_sbox_size - 33, 4) # magic numbers from original reference code
     max_v = max(avg_sbox_size - 25, 6)
@@ -175,7 +176,8 @@ def findDecBest(number, num_sboxes, max_d, desired_v):
         res = find_decomposition_opt(number, v, max_d, []);
         if res and len(res):
             res = res[1::2]
-            min_dec = min(decompose(number, res))
+            ph = PlookupHash(_, _, _, res, _)
+            min_dec = min(ph._decompose(number))
             if min_dec > desired_v:
                 v = previous_prime(min_dec + 1)
                 return v, res
@@ -187,9 +189,9 @@ def decomposeField(fieldSize, maxd, num_sboxes=27, min_v=2):
 def test_decomposeField():
     BLSr = 52435875175126190479447740508185965837690552500527637822603658699938581184513
     BN254 = 21888242871839275222246405745257275088548364400416034343698204186575808495617
-    assert decomposeField(BLSr,42) == [32, 693, 35, 696, 20, 694, 4, 668, 4, 679, 12, 695, 3, 691, 9, 693, 30, 700, 3, 688, 27, 700, 27, 694, 20, 701, 31, 694, 12, 699, 32, 701, 39, 701, 22, 701, 2, 695, 11, 698, 7, 697, 42, 703, 11, 702, 3, 691, 4, 688, 28, 703, 0, 679]
-    assert decomposeField(BN254,41) == [8, 651, 7, 658, 7, 656, 14, 666, 10, 663, 8, 654, 11, 668, 17, 677, 13, 681, 26, 683, 21, 669, 21, 681, 36, 680, 34, 677, 31, 675, 0, 668, 32, 675, 33, 683, 29, 681, 32, 683, 20, 683, 4, 655, 19, 680, 27, 683, 13, 667, 4, 678, 0, 673]
-# test_decomposeField()
+    assert decomposeField(BLSr,42)[1] == [693, 696, 694, 668, 679, 695, 691, 693, 700, 688, 700, 694, 701, 694, 699, 701, 701, 701, 695, 698, 697, 703, 702, 691, 688, 703, 679]
+    assert decomposeField(BN254,41)[1] == [651, 658, 656, 666, 663, 654, 668, 677, 681, 683, 669, 681, 680, 677, 675, 668, 675, 683, 681, 683, 683, 655, 680, 683, 667, 678, 673]
+    if get_verbose() >= 2: print(f"Testing of field decomposition complete.")
 
 def generate_prime_list(base=10, lower_limit=5, upper_limit=16, min_v=20):
     prime_list = []
@@ -228,7 +230,7 @@ def test_interval_polynomial(p=17):
                 assert not poly(j)
             for j in range(u+1, p):
                 assert poly(j)
-# test_interval_polynomial()
+    if get_verbose() >= 2: print(f"Testing of interval polynomial complete.")
 
 def invert_by_v_poly(ring, v):
     assert v < len(ring.base_ring())
@@ -244,7 +246,7 @@ def test_invert_by_v_poly(p=17):
             assert int(poly(j))*int(j) % v == 0
         for j in range(1, v):
             assert int(poly(j))*int(j) % v == 1
-# test_invert_by_v_poly()
+    if get_verbose() >= 2: print(f"Testing of invert-by-v polynomial complete.")
 
 def maybe_invert_by_v_poly(ring, v, sbox):
     points = [(i, (i^(v-2)) % v) for i in range(v)]
@@ -262,7 +264,7 @@ def test_maybe_invert_by_v_poly(p=17):
             assert int(poly(j))*int(j) % v == 1
         for j in range(v, p):
             assert int(poly(j)) == j
-# test_maybe_invert_by_v_poly()
+    if get_verbose() >= 2: print(f"Testing of maybe-invert-by-v polynomial complete.")
 
 def decomposition_poly(variables, decomposition):
     assert len(variables) == len(decomposition) + 1
@@ -272,15 +274,17 @@ def decomposition_poly(variables, decomposition):
     return poly
 
 def test_decomposition_poly():
+    _ = None
     for sboxes in [[8,9,10], [11,5,6], [3,3,3], [693, 696]]:
         size = reduce(operator.mul, sboxes, 1)
         ring = PolynomialRing(GF(next_prime(size)), len(sboxes)+1, 'x', order='degrevlex')
         variables = ring.gens()
         poly = decomposition_poly(variables, sboxes)
+        ph = PlookupHash(_, _, _, sboxes, _)
         for i in range(size):
-            dec = decompose(i, sboxes)
-            assert not poly(i, *dec)
-# test_decomposition_poly()
+            dec = ph._decompose(i)
+            assert not poly(i, *dec), f"Buggy decomposition polynomial."
+    if get_verbose() >= 2: print(f"Testing of decomposition polynomial complete.")
 
 def bar_poly_system(order, decomposition, s_box):
     num_s_boxes = len(decomposition)
@@ -306,6 +310,30 @@ def bar_poly_system(order, decomposition, s_box):
     # system += [variables[0] - variables[num_vars//2]] # Bar(x) == x
     return system
 
+def test_bar_poly_system(prime=5701, sboxes=[84, 68], v=53):
+    _ = None
+    ph = PlookupHash(prime, _, _, sboxes, v)
+    system = bar_poly_system(prime, sboxes, ph._small_s_box)
+    for inpu in [0, 1, prime-1] + [randint(1,prime-2) for _ in range(100)]:
+        outp = ph.bar([inpu])[0]
+        inpu_dec = ph._decompose(inpu)
+        outp_dec = ph._decompose(outp)
+        check = [poly(inpu, *inpu_dec, outp, *outp_dec) for poly in system]
+        if any(check):
+            print(f"prime: {prime} v: {v} sboxes: {sboxes}")
+            print(f"input:  {inpu}")
+            x = ph._decompose(inpu)
+            print(f"  decomp: {x}")
+            x = [ph._small_s_box(y) for y in x]
+            print(f"     inv: {x}")
+            x = ph._compose(x)
+            print(f"    comp: {x}")
+            print(f"output: {outp}")
+            print(f"  decomp:  {ph._decompose(outp)}")
+            print(f"polys:  {check}")
+            assert False, f"Polynomials of Bar's polynomial system do not correspond to PlookupHash."
+    if get_verbose() >= 2: print(f"Testing of Bar's poly system complete.")
+
 def conc_poly_system(order, constants, mult_matrix):
     assert len(constants) == mult_matrix.nrows(), f"Dimensions of constants and matrix mismatch: {len(constants)} vs {mult_matrix.nrows()}"
     state_size = len(constants)
@@ -315,24 +343,27 @@ def conc_poly_system(order, constants, mult_matrix):
     polys = [ constants[i] + mult_matrix[i]*invars - var[i+state_size] for i in range(state_size)]
     return polys
 
-def test_conc_poly_system():
-    prime = 5701
-    constants = [[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]]
+def test_conc_poly_system(prime=5701,
+                          constants=[[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]],
+                          mult_matrix=matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]])):
+    assert all([len(constants[0]) == len(constants[i]) for i in range(len(constants))]), f"All constants' vectors need to be of the same length."
+    assert len(constants[0]) == mult_matrix.nrows(), f"Dimensions of constants and matrix mismatch: {len(constants[0])} vs {mult_matrix.nrows()}"
+    _ = None
     constants = [[c % prime for c in cnts] for cnts in constants]
-    mult_matrix = matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]])
-    ph = PlookupHash(prime, constants, mult_matrix, [84, 68], 53)
+    state_size = len(constants[0])
+    ph = PlookupHash(prime, constants, mult_matrix, _, _)
     for i in range(len(constants)):
         polys = conc_poly_system(prime, constants[i], mult_matrix)
         for _ in range(100):
-            vals = [randint(0, prime), randint(0, prime), randint(0, prime)]
+            vals = [randint(0, prime) for _ in range(state_size)]
             vals += ph.concrete(vals, i)
             assert not any([p(vals) for p in polys])
-test_conc_poly_system()
+    if get_verbose() >= 2: print(f"Testing of Concrete's poly system complete.")
 
 def conc_bar_conc_poly_system(order, constants, mult_matrix, decomposition, s_box):
     assert len(constants) >= 2, f"Multiple 'concrete' require multiple lists of constants"
     assert len(constants[0]) == len(constants[1]), f"The lists of constants have to have the same length"
-    assert len(constants[0]) == mult_matrix.nrows(), f"Dimensions of constants and matrix mismatch: {len(constants)} vs {mult_matrix.nrows()}"
+    assert len(constants[0]) == mult_matrix.nrows(), f"Dimensions of constants and matrix mismatch: {len(constants[0])} vs {mult_matrix.nrows()}"
     num_s_boxes = len(decomposition)
     state_size = len(constants[0])
     num_vars = 2*state_size + state_size*(num_s_boxes*2 + 1) + state_size
@@ -354,28 +385,28 @@ def conc_bar_conc_poly_system(order, constants, mult_matrix, decomposition, s_bo
     system += [ring(p).subs(shift_dict_conc) for p in conc_sys_1]
     return system
 
-def test_conc_bar_conc_poly_system():
-    prime = 5701
-    constants = [[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]]
+def test_conc_bar_conc_poly_system(prime=5701,
+                                   constants=[[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]],
+                                   mult_matrix=matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]]),
+                                   s_boxes=[84, 68],
+                                   v=53):
     constants = [[c % prime for c in cnts] for cnts in constants]
-    mult_matrix = matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]])
-    s_boxes = [84, 68]
-    v = 53
+    state_size = len(constants[0])
     ph = PlookupHash(prime, constants, mult_matrix, s_boxes, v)
     polys = conc_bar_conc_poly_system(prime, constants, mult_matrix, s_boxes, ph._small_s_box)
     for _ in range(100):
-        state_0 = [randint(0, prime), randint(0, prime), randint(0, prime)]
+        state_0 = [randint(0, prime) for _ in range(state_size)]
         state_1 = ph.concrete(state_0, 0)
         state_2 = ph.bar(state_1)
         state_3 = ph.concrete(state_2, 1)
         vals = state_0 + state_1
-        for i in range(3): # all the bars
+        for i in range(state_size): # all the bars
             vals += ph._decompose(state_1[i])
             vals += [state_2[i]]
             vals += ph._decompose(state_2[i])
         vals += state_3
         assert not any([p(vals) for p in polys])
-test_conc_bar_conc_poly_system()
+    if get_verbose() >= 2: print(f"Testing of Conc-Bar-Conc's poly system complete.")
 
 
 def bar_pow_bar_poly_system(order, decomposition, s_box, exponent=5):
@@ -426,7 +457,7 @@ def is_groebner_basis(gb):
                 print(f"g:              {g}")
                 print(f"s_poly:         {spol(f,g)}")
                 print(f"reduced s_poly: {spol(f,g).reduce(gb)}")
-                assert False
+                assert False, f"Some S-Polynomial did not reduce to 0: see output above."
     return True
 
 def random_s_box_f(field_size, degree=5, terms=15):
@@ -437,7 +468,7 @@ def random_s_box_f(field_size, degree=5, terms=15):
 
 if __name__ == "__main__":
     set_verbose(2)
-    testing = False
+    testing = 2
     time_it = True
     box_type = ['default', 'random', 'iden'][0]
 
@@ -476,6 +507,17 @@ if __name__ == "__main__":
         [1, 1, 2],
     ]
 
+    if testing >= 2:
+        TestPlookupHash()
+        test_decomposeField()
+        test_interval_polynomial()
+        test_maybe_invert_by_v_poly()
+        test_decomposition_poly()
+        test_bar_poly_system()
+        test_conc_poly_system()
+        test_brick_poly_system()
+        test_conc_bar_conc_poly_system()
+
     for prime, v, sboxes in prime_dec_list:
         print(f"————————————————————————————")
         print(f"p = {prime}, v = {v}, sboxes = {sboxes}")
@@ -493,30 +535,12 @@ if __name__ == "__main__":
             [print(f"{poly}") for poly in system]
             print(f"——————————————")
         if testing:
-            TestPlookupHash()
+            # Do sboxes and prime correspond?
             tmp = reduce(operator.mul, sboxes, 1)
             assert tmp >= prime, f"[!] S-Boxes too restrictive: {tmp} < {prime}"
             tmp = ph._compose([v]*len(sboxes))
             assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
             assert all([x >= v for x in ph._decompose(prime)])
-            for inpu in [0, 1, prime-1] + [randint(1,prime-2) for _ in range(1000)]:
-                outp = ph.bar([inpu])[0]
-                inpu_dec = ph._decompose(inpu)
-                outp_dec = ph._decompose(outp)
-                check = [poly(inpu, *inpu_dec, outp, *outp_dec) for poly in system]
-                if any(check):
-                    print(f"prime: {prime} v: {v} sboxes: {sboxes}")
-                    print(f"input:  {inpu}")
-                    x = ph._decompose(inpu)
-                    print(f"  decomp: {x}")
-                    x = [ph._small_s_box(y) for y in x]
-                    print(f"     inv: {x}")
-                    x = ph._compose(x)
-                    print(f"    comp: {x}")
-                    print(f"output: {outp}")
-                    print(f"  decomp:  {ph._decompose(outp)}")
-                    print(f"polys:  {check}")
-                    assert False
         if time_it:
             print(f"time system:    {float(n(time_sys_stop - time_sys_start, digits=5)):>8.5} sec")
         print(f"polys deg's:    {[poly.degree() for poly in system]}")
