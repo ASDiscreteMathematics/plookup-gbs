@@ -4,6 +4,15 @@
 import random
 from time import process_time
 
+if not os.path.exists('../gb_voodoo/'):
+    print("The analytics in this file rely on GB_voodoo.")
+    print("Please move the corresponding files into ../gb_voodoo.")
+    exit(1)
+working_dir = os.getcwd()
+os.chdir('../gb_voodoo')
+load('analyze.sage')
+os.chdir(working_dir)
+
 class PlookupHash():
     def __init__(self, order, constants, mult_matrix, sboxes, v, s_box_f=None):
         self.order = order
@@ -557,29 +566,4 @@ if __name__ == "__main__":
         system = conc_bar_conc_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box)
         system = bar_poly_system(prime, sboxes, ph._small_s_box)
         time_sys_stop = process_time()
-        if get_verbose() >= 3:
-            print(f"——————————————")
-            [print(f"{poly}") for poly in system]
-            print(f"——————————————")
-        print(f"time system:    {float(n(time_sys_stop - time_sys_start, digits=5)):>8.5} sec")
-        print(f"polys deg's:    {[poly.degree() for poly in system]}")
-        print(f"macaulay bound: {1 + sum([poly.degree() - 1 for poly in system])}")
-        print(f"estimated dreg: {floor(2*len(sboxes)*prime**(1/len(sboxes)))}")
-
-        time_gb_start = process_time()
-        gb = Ideal(system).groebner_basis()
-        time_gb_stop = process_time()
-        if testing:
-            assert is_groebner_basis(gb)
-        print(f"time gb:        {float(n(time_gb_stop - time_gb_start, digits=5)):>8.5} sec")
-        gb = sorted(gb, key=lambda poly : poly.degree())
-        print(f"actual dreg:    {gb[-1].degree()}")
-        print(f"#elts in gb:    {len(gb)}")
-        if get_verbose() >= 1:
-            print(f"gb's deg's:     {[poly.degree() for poly in gb]}")
-        if get_verbose() >= 3:
-            print(f"——————————————")
-            [print(f"{poly}") for poly in gb]
-            print(f"——————————————")
-        print(f"————————————————————————————")
-        print(f"")
+        print_gb_analytics(system, write_to_disk=False)
