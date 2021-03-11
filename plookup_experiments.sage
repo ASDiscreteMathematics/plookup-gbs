@@ -546,13 +546,6 @@ if __name__ == "__main__":
         if get_verbose() >= 2:
             print(f"f in sbox = {f}")
         ph = PlookupHash(prime, constants, mult_matrix, sboxes, v, s_box_f=s_box_f)
-        time_sys_start = process_time()
-        system = bar_poly_system(prime, sboxes, ph._small_s_box)
-        time_sys_stop = process_time()
-        if get_verbose() >= 3:
-            print(f"——————————————")
-            [print(f"{poly}") for poly in system]
-            print(f"——————————————")
         if testing:
             # Do sboxes and prime correspond?
             tmp = reduce(operator.mul, sboxes, 1)
@@ -560,6 +553,14 @@ if __name__ == "__main__":
             tmp = ph._compose([v]*len(sboxes))
             assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
             assert all([x >= v for x in ph._decompose(prime)])
+        time_sys_start = process_time()
+        system = conc_bar_conc_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box)
+        system = bar_poly_system(prime, sboxes, ph._small_s_box)
+        time_sys_stop = process_time()
+        if get_verbose() >= 3:
+            print(f"——————————————")
+            [print(f"{poly}") for poly in system]
+            print(f"——————————————")
         print(f"time system:    {float(n(time_sys_stop - time_sys_start, digits=5)):>8.5} sec")
         print(f"polys deg's:    {[poly.degree() for poly in system]}")
         print(f"macaulay bound: {1 + sum([poly.degree() - 1 for poly in system])}")
