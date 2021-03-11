@@ -360,6 +360,25 @@ def test_conc_poly_system(prime=5701,
             assert not any([p(vals) for p in polys])
     if get_verbose() >= 2: print(f"Testing of Concrete's poly system complete.")
 
+def brick_poly_system(order, state_size=3):
+    assert state_size == 3, f"It's not obvious how to generalize Brick from the specification of PlookupHash."
+    ring = PolynomialRing(GF(order), 'x', 2*state_size)
+    x = ring.gens() # in_0, in_1, in_2, out_0, out_1, out_2
+    polys = [x[2]**5 - x[3],
+             x[0]*x[2]**2 + x[0]*x[2] + 2*x[0] - x[4],
+             x[0]**2*x[1] + 3*x[0]*x[1] + 4*x[1] - x[5]]
+    return polys
+
+def test_brick_poly_system(prime=5701):
+    _ = None
+    ph = PlookupHash(prime, _, _, _, _)
+    polys = brick_poly_system(prime)
+    for _ in range(100):
+        vals = [randint(0, prime) for _ in range(3)]
+        vals += ph.brick(vals)
+        assert not any([p(vals) for p in polys])
+    if get_verbose() >= 2: print(f"Testing of Brick's poly system complete.")
+
 def conc_bar_conc_poly_system(order, constants, mult_matrix, decomposition, s_box):
     assert len(constants) >= 2, f"Multiple 'concrete' require multiple lists of constants"
     assert len(constants[0]) == len(constants[1]), f"The lists of constants have to have the same length"
