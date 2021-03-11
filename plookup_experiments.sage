@@ -510,7 +510,6 @@ if __name__ == "__main__":
 
     # parameters that kill Ferdinand's machine when using bar_pow_bar
     prime_dec_list = [ (5701, 53, [84, 68]) ]
-
     constants = [
         [3**100, 2**100, 5**50],
         [3**110, 2**110, 5**60],
@@ -519,11 +518,11 @@ if __name__ == "__main__":
         [3**140, 2**140, 5**90],
         [3**150, 2**150, 5**100],
     ]
-    mult_matrix = [
+    mult_matrix = matrix([
         [2, 1, 1],
         [1, 2, 1],
         [1, 1, 2],
-    ]
+    ])
 
     if testing >= 2:
         TestPlookupHash()
