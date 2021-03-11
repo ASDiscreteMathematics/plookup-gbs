@@ -193,9 +193,11 @@ def test_decomposeField():
     assert decomposeField(BN254,41)[1] == [651, 658, 656, 666, 663, 654, 668, 677, 681, 683, 669, 681, 680, 677, 675, 668, 675, 683, 681, 683, 683, 655, 680, 683, 667, 678, 673]
     if get_verbose() >= 2: print(f"Testing of field decomposition complete.")
 
-def generate_prime_list(base=10, lower_limit=5, upper_limit=16, min_v=20):
+def generate_prime_list(primes=None, base=10, lower_limit=5, upper_limit=16, min_v=20):
+    if not primes:
+        primes = [random_prime(base**(i+1), lbound=base**i) for i in range(lower_limit, upper_limit)]
     prime_list = []
-    for prime in [random_prime(base**(i+1), lbound=base**i) for i in range(lower_limit, upper_limit)]:
+    for prime in primes:
         max_d = 42
         num_sboxes = math.floor(math.log(prime, 10)) // 2
         num_sboxes = max(num_sboxes, 2)
