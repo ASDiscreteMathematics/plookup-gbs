@@ -564,6 +564,7 @@ if __name__ == "__main__":
             assert all([x >= v for x in ph._decompose(prime)])
         time_sys_start = process_time()
         system = conc_bar_conc_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box)
-        system = bar_poly_system(prime, sboxes, ph._small_s_box)
+        variables = system[0].parent().gens()
+        system = [variables[0]] + system + [variables[-3]] # input & output constraints
         time_sys_stop = process_time()
         print_gb_analytics(system, write_to_disk=False)
