@@ -101,6 +101,7 @@ class TestPlookupHash():
     def __init__(self):
         self._test_compose_decompose()
         self._test_bar()
+        self._test_brick()
         if get_verbose() >= 2: print("Testing of PlookupHash complete.")
 
     def _test_compose_decompose(self):
@@ -116,6 +117,15 @@ class TestPlookupHash():
         assert ph.bar([12, 123, 456, 789]) == [14, 145, 236, 789]
         ph = PlookupHash(70657, _, _, [40, 40, 40], 37)
         assert ph.bar([36, 37, 38, 41, 64001, 18, 1618]) == [36, 37, 38, 41, 1, 35, 1635]
+
+    def _test_brick(self):
+        _ = None
+        ph = PlookupHash(101, _, _, _, _)
+        assert ph.brick([0, 0, 0]) == [0, 0, 0]
+        assert ph.brick([1, 1, 1]) == [1, 4, 8]
+        assert ph.brick([2, 3, 4]) == [14, 44, 42]
+        ph = PlookupHash(1009, _, _, _, _)
+        assert ph.brick([10, 10, 10]) == [109, 111, 331]
 
 def miller_rabin(n, k):
     # If number is even, it's a composite number
