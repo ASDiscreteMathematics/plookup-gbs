@@ -457,6 +457,45 @@ def test_conc_bar_conc_poly_system(prime=5701,
         assert not any([p(vals) for p in polys])
     if get_verbose() >= 2: print(f"Testing of Conc-Bar-Conc's poly system complete.")
 
+def conc_bar_poly_system(order, constants, mult_matrix, decomposition, s_box):
+    assert len(constants[0]) == mult_matrix.nrows(), f"Dimensions of constants and matrix mismatch: {len(constants[0])} vs {mult_matrix.nrows()}"
+    num_s_boxes = len(decomposition)
+    state_size = len(constants[0])
+    num_vars = 2*state_size + state_size*(num_s_boxes*2 + 1)
+    ring = PolynomialRing(GF(order), 'x', num_vars)
+    var = ring.gens()
+    all_shift_dict_bar = []
+    for s in range(state_size):
+        shift_dict_bar = {var[0] : var[state_size + s]} # output of concrete is input of bar
+        shift_dict_bar.update( {var[i] : var[i + 2*state_size + s*(num_s_boxes*2 + 1) - 1] for i in range(1, num_s_boxes*2 + 2)} ) # take next free variables
+        all_shift_dict_bar += [shift_dict_bar]
+    conc_sys = conc_poly_system(order, constants[0], mult_matrix)
+    bar_sys = bar_poly_system(order, decomposition, s_box)
+    system = [ring(p) for p in conc_sys]
+    for shift_dict_bar in all_shift_dict_bar:
+        system += [ring(p).subs(shift_dict_bar) for p in bar_sys]
+    return system
+
+def test_conc_bar_poly_system(prime=5701,
+                              constants=[[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]],
+                              mult_matrix=matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]]),
+                              s_boxes=[84, 68],
+                              v=53):
+    constants = [[c % prime for c in cnts] for cnts in constants]
+    state_size = len(constants[0])
+    ph = PlookupHash(prime, constants, mult_matrix, s_boxes, v)
+    polys = conc_bar_poly_system(prime, constants, mult_matrix, s_boxes, ph._small_s_box)
+    for _ in range(100):
+        state_0 = [randint(0, prime) for _ in range(state_size)]
+        state_1 = ph.concrete(state_0, 0)
+        state_2 = ph.bar(state_1)
+        vals = state_0 + state_1
+        for i in range(state_size): # all the bars
+            vals += ph._decompose(state_1[i])
+            vals += [state_2[i]]
+            vals += ph._decompose(state_2[i])
+        assert not any([p(vals) for p in polys])
+    if get_verbose() >= 2: print(f"Testing of Conc-Bar's poly system complete.")
 
 def bar_pow_bar_poly_system(order, decomposition, s_box, exponent=5):
     num_s_boxes = len(decomposition)
@@ -564,6 +603,7 @@ if __name__ == "__main__":
         test_conc_poly_system()
         test_brick_poly_system()
         test_conc_bar_conc_poly_system()
+        test_conc_bar_poly_system()
 
     for prime, v, sboxes in prime_dec_list:
         print(f"————————————————————————————")
