@@ -4,15 +4,6 @@
 import random
 from time import process_time
 
-if not os.path.exists('../gb_voodoo/'):
-    print("The analytics in this file rely on GB_voodoo.")
-    print("Please move the corresponding files into ../gb_voodoo.")
-    exit(1)
-working_dir = os.getcwd()
-os.chdir('../gb_voodoo')
-load('analyze.sage')
-os.chdir(working_dir)
-
 class PlookupHash():
     def __init__(self, order, constants, mult_matrix, sboxes, v, s_box_f=None):
         self.order = order
@@ -613,8 +604,19 @@ def random_s_box_f(field_size, degree=5, terms=15):
 
 if __name__ == "__main__":
     set_verbose(2)
-    testing = 2
+    testing = 0
     box_type = ['default', 'random', 'iden'][0]
+    gb_engin = ['magma', 'singular', 'sagef5'][1]
+
+    if gb_engin == 'sagef5': # try loading custem F5 implementation
+        if not os.path.exists('../gb_voodoo/'):
+            print("The analytics in this file rely on GB_voodoo.")
+            print("Please move the corresponding files into ../gb_voodoo.")
+            exit(1)
+        working_dir = os.getcwd()
+        os.chdir('../gb_voodoo')
+        load('analyze.sage')
+        os.chdir(working_dir)
 
     # Proposed by Dmitry 2021-02-04
     prime_dec_list = [
@@ -681,4 +683,16 @@ if __name__ == "__main__":
         time_sys_start = process_time()
         system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box)
         time_sys_stop = process_time()
-        print_gb_analytics(system, write_to_disk=False)
+        time_gb_start = process_time()
+        if gb_engin == 'magma':
+            magma.set_nthreads(8)
+            magma.set_verbose("Groebner", 4)
+            gb, degs = magma.GroebnerBasis(system, Faugere=True, nvals=2)
+            print(gb)
+            print(degs)
+        if gb_engin == 'singular':
+            gb = Ideal(system).groebner_basis()
+            print(gb)
+        if gb_engin == 'sagef5':
+            print_gb_analytics(system, verbosity=get_verbose())
+        time_gb_stop = process_time()
