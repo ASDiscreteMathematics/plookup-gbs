@@ -97,12 +97,24 @@ class PlookupHash():
         new_state = [s % order for s in new_state]
         return new_state
 
+    def _concrete_inv(self, state, cnst_idx):
+        order = self.order
+        matrix = self.matrix
+        field = GF(order)
+        matrix = matrix.change_ring(field)
+        constants = [field(c) for c in self.constants[cnst_idx]]
+        new_state = vector(state) - vector(constants)
+        new_state = [s-c for s, c in zip(state, constants)]
+        new_state = matrix.inverse() * vector(new_state)
+        return list(new_state)
+
 class TestPlookupHash():
     def __init__(self):
         self._test_compose_decompose()
         self._test_bar()
         self._test_brick()
         self._test_concrete()
+        self._test_concrete_inv()
         if get_verbose() >= 2: print("Testing of PlookupHash complete.")
 
     def _test_compose_decompose(self):
@@ -135,6 +147,17 @@ class TestPlookupHash():
         assert ph.concrete([0]*3, 1) == [4, 5, 6]
         assert ph.concrete([1]*3, 0) == [4, 5, 6]
         assert ph.concrete([1]*3, 1) == [7, 8, 9]
+
+    def _test_concrete_inv(self):
+        _ = None
+        ph = PlookupHash(101, [[1, 2, 3], [4, 5, 6]], [[2,1,1],[1,2,1],[1,1,2]], _, _)
+        verb = get_verbose()
+        set_verbose(-1)
+        for _ in range(100):
+            state = [randint(0, 101) for _ in range(3)]
+            assert ph._concrete_inv(ph.concrete(state, 0), 0) == state
+            assert ph._concrete_inv(ph.concrete(state, 1), 1) == state
+        set_verbose(verb)
 
 def miller_rabin(n, k):
     # If number is even, it's a composite number
@@ -457,6 +480,40 @@ def test_conc_bar_conc_poly_system(prime=5701,
         assert not any([p(vals) for p in polys])
     if get_verbose() >= 2: print(f"Testing of Conc-Bar-Conc's poly system complete.")
 
+def conc_bar_conc_rebound_prep_poly_system(order, constants, mult_matrix, decomposition, s_box):
+    '''
+    Instead of fully modelling Concrete, add one equation at the beginning and one at the end
+    ensuring that the state has form (0,✶,✶) ––[Conc-Bar-Conc]–→ (0,✶,✶).
+    '''
+    assert len(constants) >= 2, f"Multiple 'concrete' require multiple lists of constants"
+    assert len(constants[0]) == len(constants[1]), f"The lists of constants have to have the same length"
+    assert len(constants[0]) == mult_matrix.nrows(), f"Dimensions of constants and matrix mismatch: {len(constants[0])} vs {mult_matrix.nrows()}"
+    field = GF(order)
+    mult_matrix = mult_matrix.change_ring(field)
+    constants = [[field(c) for c in const] for const in constants]
+    assert mult_matrix.is_invertible(), f"This trick only works for invertible multiplication matrices."
+    num_s_boxes = len(decomposition)
+    state_size = len(constants[0])
+    num_vars = state_size*(num_s_boxes*2 + 2)
+    ring = PolynomialRing(field, 'x', num_vars)
+    var = ring.gens()
+    all_shift_dict_bar = []
+    for s in range(state_size):
+        shift_dict_bar = {var[i] : var[i + s*(num_s_boxes*2 + 2)] for i in range(num_s_boxes*2 + 2)} # take next free variables
+        all_shift_dict_bar += [shift_dict_bar]
+    bar_sys = bar_poly_system(order, decomposition, s_box)
+    conc_0_out_vars = [var[s*(num_s_boxes*2 + 2)] for s in range(state_size)]
+    conc_1_in_vars = [var[s*(num_s_boxes*2 + 2) + num_s_boxes + 1] for s in range(state_size)]
+    ph = PlookupHash(order, constants, mult_matrix, None, None)
+    system = [ph._concrete_inv(conc_0_out_vars, 0)[0]]
+    for shift_dict_bar in all_shift_dict_bar:
+        system += [ring(p).subs(shift_dict_bar) for p in bar_sys]
+    state = mult_matrix * vector(conc_1_in_vars)
+    state += vector(constants[1])
+    system += [state[0]]
+    return system
+
+
 def conc_bar_poly_system(order, constants, mult_matrix, decomposition, s_box):
     assert len(constants[0]) == mult_matrix.nrows(), f"Dimensions of constants and matrix mismatch: {len(constants[0])} vs {mult_matrix.nrows()}"
     num_s_boxes = len(decomposition)
@@ -622,8 +679,6 @@ if __name__ == "__main__":
             assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
             assert all([x >= v for x in ph._decompose(prime)])
         time_sys_start = process_time()
-        system = conc_bar_conc_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box)
-        variables = system[0].parent().gens()
-        system = [variables[0]] + system + [variables[-3]] # input & output constraints
+        system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box)
         time_sys_stop = process_time()
         print_gb_analytics(system, write_to_disk=False)
