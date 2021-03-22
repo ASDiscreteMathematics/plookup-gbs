@@ -714,6 +714,7 @@ if __name__ == "__main__":
             magma.set_nthreads(8)
             magma.set_verbose("Groebner", 4)
             gb, degs = magma.GroebnerBasis(system, Faugere=True, nvals=2)
+            gb = [poly.sage() for poly in gb]
             print(gb)
             print(degs)
         if gb_engin == 'singular':
