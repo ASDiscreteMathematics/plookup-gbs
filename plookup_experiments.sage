@@ -14,6 +14,11 @@ class PlookupHash():
         self.s_box_f = s_box_f
         if not s_box_f:
             self.s_box_f = lambda x : (x**(v-2)) % v
+        if order:
+            verb = get_verbose()
+            set_verbose(-1)
+            self.matrix_inv = self.matrix.change_ring(GF(order)).inverse()
+            set_verbose(verb)
 
     def __call__(self, state):
         brick, concrete, bar = self.brick, self.concrete, self.bar
@@ -90,13 +95,11 @@ class PlookupHash():
 
     def _concrete_inv(self, state, cnst_idx):
         order = self.order
-        matrix = self.matrix
-        field = GF(order)
-        matrix = matrix.change_ring(field)
-        constants = [field(c) for c in self.constants[cnst_idx]]
+        matrix_inv = self.matrix_inv
+        constants = [GF(order)(c) for c in self.constants[cnst_idx]]
         new_state = vector(state) - vector(constants)
         new_state = [s-c for s, c in zip(state, constants)]
-        new_state = matrix.inverse() * vector(new_state)
+        new_state = matrix_inv * vector(new_state)
         return list(new_state)
 
 class TestPlookupHash():
