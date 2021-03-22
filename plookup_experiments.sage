@@ -497,16 +497,38 @@ def conc_bar_conc_rebound_prep_poly_system(order, constants, mult_matrix, decomp
         all_shift_dict_bar += [shift_dict_bar]
     bar_sys = bar_poly_system(order, decomposition, s_box)
     conc_0_out_vars = [var[s*(num_s_boxes*2 + 2)] for s in range(state_size)]
-    conc_1_in_vars = [var[s*(num_s_boxes*2 + 2) + num_s_boxes + 1] for s in range(state_size)]
     ph = PlookupHash(order, constants, mult_matrix, None, None)
-    system = [ph._concrete_inv(conc_0_out_vars, 0)[0]]
+    system = [ph._concrete_inv(conc_0_out_vars, 0)[0]] # First concrete has input (0,✶,✶)
     for shift_dict_bar in all_shift_dict_bar:
         system += [ring(p).subs(shift_dict_bar) for p in bar_sys]
+    conc_1_in_vars = [var[s*(num_s_boxes*2 + 2) + num_s_boxes + 1] for s in range(state_size)]
     state = mult_matrix * vector(conc_1_in_vars)
     state += vector(constants[1])
-    system += [state[0]]
+    system += [state[0]] # Second concrete has output (0,✶,✶)
     return system
 
+def test_conc_bar_conc_rebound_prep_poly_system(prime=5701,
+                                                constants=[[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]],
+                                                mult_matrix=matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]]),
+                                                s_boxes=[84, 68],
+                                                v=53):
+    constants = [[c % prime for c in cnts] for cnts in constants]
+    state_size = len(constants[0])
+    ph = PlookupHash(prime, constants, mult_matrix, s_boxes, v)
+    polys = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, s_boxes, ph._small_s_box)
+    for _ in range(100):
+        state_0 = [0] + [randint(0, prime) for _ in range(state_size-1)]
+        state_1 = ph.concrete(state_0, 0)
+        state_2 = ph.bar(state_1)
+        state_3 = ph.concrete(state_2, 1)
+        vals = []
+        for i in range(state_size): # all the bars
+            vals += [state_1[i]]
+            vals += ph._decompose(state_1[i])
+            vals += [state_2[i]]
+            vals += ph._decompose(state_2[i])
+        assert not any([p(vals) for p in polys[:-1]])
+    if get_verbose() >= 2: print(f"Testing of improved Conc-Bar-Conc's poly system complete.")
 
 def conc_bar_poly_system(order, constants, mult_matrix, decomposition, s_box):
     assert len(constants[0]) == mult_matrix.nrows(), f"Dimensions of constants and matrix mismatch: {len(constants[0])} vs {mult_matrix.nrows()}"
@@ -665,6 +687,7 @@ if __name__ == "__main__":
         test_conc_poly_system()
         test_brick_poly_system()
         test_conc_bar_conc_poly_system()
+        test_conc_bar_conc_rebound_prep_poly_system()
         test_conc_bar_poly_system()
 
     for prime, v, sboxes in prime_dec_list:
