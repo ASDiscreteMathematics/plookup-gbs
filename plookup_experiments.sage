@@ -734,6 +734,11 @@ if __name__ == "__main__":
             magma.set_verbose("Groebner", 4)
             gb, degs = magma.GroebnerBasis(system, Faugere=True, nvals=2)
             gb = [poly.sage() for poly in gb]
+            if testing >= 2: # Testing for Conc-Bar-Conc input / output constraints
+                v = Ideal(gb).variety()
+                xs = system[0].parent().gens() # variables
+                assert all([ph._concrete_inv([e[xs[0]], e[xs[6]], e[xs[12]]], 0)[0] == 0 for e in v]) # input has form (0,✶,✶)
+                assert all([ph.concrete([e[xs[3]], e[xs[9]], e[xs[15]]], 1)[0] == 0 for e in v]) # output has form (0,✶,✶)
             print(gb)
             print(degs)
         if gb_engin == 'singular':
