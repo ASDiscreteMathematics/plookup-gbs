@@ -676,11 +676,12 @@ if __name__ == "__main__":
         (51888844697, 139, [139, 139, 139, 139, 139]),
         (210906087421, 179, [184, 184, 184, 184, 184]),
     ]
-    # Random generation of primes and their decompositions
+    # prime_dec_list = generate_prime_list(primes=[1030297, 12541, 1295027, 1191013, 2248087, 1003875853, 51888844697, 210906087421])
     # prime_dec_list = generate_prime_list(base=10, lower_limit=2, upper_limit=5, min_v=0)
+    # prime_dec_list = [ (5701, 53, [84, 68]) ]
+    # prime_dec_list = generate_prime_list(primes=[727])
+    prime_dec_list = [(167, 11, [13, 13])]
 
-    # parameters that kill Ferdinand's machine when using bar_pow_bar
-    prime_dec_list = [ (5701, 53, [84, 68]) ]
     constants = [
         [3**100, 2**100, 5**50],
         [3**110, 2**110, 5**60],
