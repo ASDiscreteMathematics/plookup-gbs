@@ -484,13 +484,15 @@ def test_conc_bar_conc_poly_system(prime=5701,
         assert not any([p(vals) for p in polys])
     if get_verbose() >= 2: print(f"Testing of Conc-Bar-Conc's poly system complete.")
 
-def conc_bar_conc_rebound_prep_poly_system(order, constants, mult_matrix, decomposition, s_box):
+def conc_bar_conc_rebound_prep_poly_system(order, constants, mult_matrix, decomposition, s_box, in_out_equal=False):
     '''
     Instead of fully modelling Concrete, add one equation at the beginning and one at the end
     ensuring that the state has form (0,✶,✶) ––[Conc-Bar-Conc]–→ (0,✶,✶).
     Since Concrete is a linear function, it is unecessary to introduce new variables or many polynomial
     equations (as done in function conc_bar_conc_poly_system).
     The specific constraints on input and output are in preperation for a rebound attack.
+    If the flag 'in_out_equal' is set to True, the polynomial system encodes the relaxed
+    requirement (α,✶,✶) ––[Conc-Bar-Conc]–→ (α,✶,✶) instead of (0,✶,✶) ––[Conc-Bar-Conc]–→ (0,✶,✶).
     '''
     assert len(constants) >= 2, f"Multiple 'concrete' require multiple lists of constants"
     assert len(constants[0]) == len(constants[1]), f"The lists of constants have to have the same length"
@@ -511,13 +513,20 @@ def conc_bar_conc_rebound_prep_poly_system(order, constants, mult_matrix, decomp
     bar_sys = bar_poly_system(order, decomposition, s_box)
     conc_0_out_vars = [var[s*(num_s_boxes*2 + 2)] for s in range(state_size)]
     ph = PlookupHash(order, constants, mult_matrix, None, None)
-    system = [ph._concrete_inv(conc_0_out_vars, 0)[0]] # First concrete has input (0,✶,✶)
+    conc_0_in_0 = ph._concrete_inv(conc_0_out_vars, 0)[0]
+    system = []
+    if not in_out_equal:
+        system += [conc_0_in_0] # First concrete has input (0,✶,✶)
     for shift_dict_bar in all_shift_dict_bar:
         system += [ring(p).subs(shift_dict_bar) for p in bar_sys]
     conc_1_in_vars = [var[s*(num_s_boxes*2 + 2) + num_s_boxes + 1] for s in range(state_size)]
-    state = mult_matrix * vector(conc_1_in_vars)
+    state = mult_matrix * vector(conc_1_in_vars) # symbolic ph.concrete()
     state += vector(constants[1])
-    system += [state[0]] # Second concrete has output (0,✶,✶)
+    conc_1_out_0 = state[0]
+    if not in_out_equal:
+        system += [conc_1_out_0] # Second concrete has output (0,✶,✶)
+    if in_out_equal:
+        system += [conc_0_in_0 - conc_1_out_0] # first input element and first output element need to be equal
     return system
 
 def test_conc_bar_conc_rebound_prep_poly_system(prime=5701,
@@ -726,7 +735,7 @@ if __name__ == "__main__":
             assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
             assert all([x >= v for x in ph._decompose(prime)]), f"For one of the decomposed parts, applying the f might cause an overflow."
         time_sys_start = process_time()
-        system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box)
+        system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False)
         time_sys_stop = process_time()
         time_gb_start = process_time()
         if gb_engin == 'magma':
