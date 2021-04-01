@@ -427,6 +427,13 @@ def test_brick_poly_system(prime=5701):
     if get_verbose() >= 2: print(f"Testing of Brick's poly system complete.")
 
 def conc_bar_conc_poly_system(order, constants, mult_matrix, decomposition, s_box):
+    '''
+    Construct a system of polynomials modeling subsequent sub-functions Concrete, Bar, Concrete.
+    The modeling is done in the most naïva way: per sub-function, a new variable is declared for
+    each state elemnt in its input and its output. For the transition between sub-functions, a
+    polynomial of the form x - y is introduced, ensuring that the “output” of one sub-function
+    is the input to the next.
+    '''
     assert len(constants) >= 2, f"Multiple 'concrete' require multiple lists of constants"
     assert len(constants[0]) == len(constants[1]), f"The lists of constants have to have the same length"
     assert len(constants[0]) == mult_matrix.nrows(), f"Dimensions of constants and matrix mismatch: {len(constants[0])} vs {mult_matrix.nrows()}"
@@ -456,6 +463,9 @@ def test_conc_bar_conc_poly_system(prime=5701,
                                    mult_matrix=matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]]),
                                    s_boxes=[84, 68],
                                    v=53):
+    '''
+    Randomized testing of the Concrete-Bar-Concrete polynomial system.
+    '''
     constants = [[c % prime for c in cnts] for cnts in constants]
     state_size = len(constants[0])
     ph = PlookupHash(prime, constants, mult_matrix, s_boxes, v)
@@ -478,6 +488,9 @@ def conc_bar_conc_rebound_prep_poly_system(order, constants, mult_matrix, decomp
     '''
     Instead of fully modelling Concrete, add one equation at the beginning and one at the end
     ensuring that the state has form (0,✶,✶) ––[Conc-Bar-Conc]–→ (0,✶,✶).
+    Since Concrete is a linear function, it is unecessary to introduce new variables or many polynomial
+    equations (as done in function conc_bar_conc_poly_system).
+    The specific constraints on input and output are in preperation for a rebound attack.
     '''
     assert len(constants) >= 2, f"Multiple 'concrete' require multiple lists of constants"
     assert len(constants[0]) == len(constants[1]), f"The lists of constants have to have the same length"
@@ -512,6 +525,11 @@ def test_conc_bar_conc_rebound_prep_poly_system(prime=5701,
                                                 mult_matrix=matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]]),
                                                 s_boxes=[84, 68],
                                                 v=53):
+    '''
+    Randomzied testing of the variable-optimized Concrete-Bar-Concrete polynomial system, as far
+    as computationally possible. In particular, the output constraint (0,✶,✶) is not tested against,
+    since identifying the correct input values for this constraint to hold is (conjectured to be) difficult.
+    '''
     constants = [[c % prime for c in cnts] for cnts in constants]
     state_size = len(constants[0])
     ph = PlookupHash(prime, constants, mult_matrix, s_boxes, v)
@@ -705,7 +723,7 @@ if __name__ == "__main__":
             assert tmp >= prime, f"[!] S-Boxes too restrictive: {tmp} < {prime}"
             tmp = ph._compose([v]*len(sboxes))
             assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
-            assert all([x >= v for x in ph._decompose(prime)])
+            assert all([x >= v for x in ph._decompose(prime)]), f"For one of the decomposed parts, applying the f might cause an overflow."
         time_sys_start = process_time()
         system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box)
         time_sys_stop = process_time()
