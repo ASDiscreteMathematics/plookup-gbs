@@ -136,11 +136,11 @@ class TestPlookupHash():
 
     def _test_concrete(self):
         _ = None
-        ph = PlookupHash(101, [[1, 2, 3], [4, 5, 6]], [[1]*3]*3, _, _)
-        assert ph.concrete([0]*3, 0) == [1, 2, 3]
-        assert ph.concrete([0]*3, 1) == [4, 5, 6]
-        assert ph.concrete([1]*3, 0) == [4, 5, 6]
-        assert ph.concrete([1]*3, 1) == [7, 8, 9]
+        ph = PlookupHash(101, [[1, 2, 3], [4, 5, 6]], [[2,1,1],[1,2,1],[1,1,2]], _, _)
+        assert ph.concrete([0]*3, 0) == [1, 2,  3], f"constants are not replicated correctly in round 0"
+        assert ph.concrete([0]*3, 1) == [4, 5,  6], f"constants are not replicated correctly in round 1"
+        assert ph.concrete([1]*3, 0) == [5, 6,  7], f"matrix multiplication seems off in round 0"
+        assert ph.concrete([1]*3, 1) == [8, 9, 10], f"matrix multiplication seems off in round 1"
 
     def _test_concrete_inv(self):
         _ = None
