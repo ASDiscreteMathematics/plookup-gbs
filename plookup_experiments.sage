@@ -658,7 +658,7 @@ if __name__ == "__main__":
     set_verbose(2)
     testing = 0
     box_type = ['default', 'random', 'iden'][0]
-    gb_engin = ['magma', 'singular', 'sagef5'][1]
+    gb_engin = ['magma', 'singular', 'sagef5', 'fgb'][0]
 
     if gb_engin == 'sagef5': # try loading custem F5 implementation
         if not os.path.exists('../gb_voodoo/'):
@@ -748,6 +748,10 @@ if __name__ == "__main__":
             gb = Ideal(system).groebner_basis()
         if gb_engin == 'sagef5':
             gb = print_gb_analytics(system, verbosity=get_verbose(), write_to_disk=False, return_gb=True)
+        if gb_engin == 'fgb':
+            import fgb_sage
+            gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
+            gb = list(gb)
         time_gb_stop = process_time()
         # Testing for Conc-Bar-Conc input / output constraints
         if testing >= 2:
