@@ -689,7 +689,17 @@ if __name__ == "__main__":
     # prime_dec_list = generate_prime_list(base=10, lower_limit=2, upper_limit=5, min_v=0)
     # prime_dec_list = [ (5701, 53, [84, 68]) ]
     # prime_dec_list = generate_prime_list(primes=[727])
-    prime_dec_list = [(167, 11, [13, 13])]
+
+    prime_dec_list = [
+        ( 47,  5, [ 7,  7]),
+        ( 61,  7, [ 8,  8]), # composition of [7, 7] is 63 ⇒ not a field element
+        ( 71,  7, [ 9,  8]),
+        ( 97,  7, [10, 10]),
+        (109,  7, [11, 10]),
+        (127,  7, [11, 12]),
+        (131, 11, [12, 11]), # composition of [11, 11] is 132 ⇒ not a field element
+        (167, 11, [13, 13]),
+    ]
 
     constants = [
         [3**100, 2**100, 5**50],
