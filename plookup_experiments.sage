@@ -744,10 +744,10 @@ if __name__ == "__main__":
             tmp = ph._compose([v]*len(sboxes))
             assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
             assert all([x >= v for x in ph._decompose(prime)]), f"For one of the decomposed parts, applying the f might cause an overflow."
-        time_sys_start = process_time()
+        time_sys = process_time()
         system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False)
-        time_sys_stop = process_time()
-        time_gb_start = process_time()
+        time_sys = process_time() - time_sys
+        time_gb = process_time()
         if gb_engin == 'magma':
             magma.set_nthreads(8)
             magma.set_verbose("Groebner", 4)
@@ -762,11 +762,12 @@ if __name__ == "__main__":
             import fgb_sage
             gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
             gb = list(gb)
-        time_gb_stop = process_time()
+        time_gb = process_time() - time_gb
         # Testing for Conc-Bar-Conc input / output constraints
         if testing >= 2:
             v = Ideal(gb).variety()
             xs = system[0].parent().gens() # variables
             assert all([ph._concrete_inv([e[xs[0]], e[xs[6]], e[xs[12]]], 0)[0] == 0 for e in v]) # input has form (0,✶,✶)
             assert all([ph.concrete([e[xs[3]], e[xs[9]], e[xs[15]]], 1)[0] == 0 for e in v]) # output has form (0,✶,✶)
-        print(gb)
+        print(f"time sys: {time_sys}")
+        print(f"time gb:  {time_gb}")
