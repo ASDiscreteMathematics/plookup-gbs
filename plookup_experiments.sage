@@ -648,6 +648,17 @@ def is_groebner_basis(gb):
                 assert False, f"Some S-Polynomial did not reduce to 0: see output above."
     return True
 
+def random_equivalent_system(system, var_name='z', mon_order="degrevlex"):
+    ring = system[0].parent()
+    field = ring.base()
+    num_vars = len(ring.gens())
+    ring = PolynomialRing(field, var_name, num_vars, order=mon_order)
+    degrees = [s.degree() for s in system]
+    num_terms = [len(s.coefficients()) for s in system]
+    polys = [ring.random_element(d, t) for d, t in zip(degrees, num_terms)]
+    return polys
+
+
 def random_s_box_f(field_size, degree=5, terms=15):
     ring.<x> = GF(field_size)[]
     f = ring.random_element(degree, terms)
@@ -657,6 +668,7 @@ def random_s_box_f(field_size, degree=5, terms=15):
 if __name__ == "__main__":
     set_verbose(2)
     testing = 0
+    compute_on_equivalent_random_system = True
     box_type = ['default', 'random', 'iden'][0]
     gb_engin = ['magma', 'singular', 'sagef5', 'fgb'][0]
 
@@ -747,6 +759,8 @@ if __name__ == "__main__":
         time_sys = process_time()
         system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False)
         time_sys = process_time() - time_sys
+        if compute_on_equivalent_random_system:
+            system = random_equivalent_system(system)
         time_gb = process_time()
         if gb_engin == 'magma':
             magma.set_nthreads(8)
@@ -764,7 +778,7 @@ if __name__ == "__main__":
             gb = list(gb)
         time_gb = process_time() - time_gb
         # Testing for Conc-Bar-Conc input / output constraints
-        if testing >= 2:
+        if testing >= 2 and not compute_on_equivalent_random_system:
             v = Ideal(gb).variety()
             xs = system[0].parent().gens() # variables
             assert all([ph._concrete_inv([e[xs[0]], e[xs[6]], e[xs[12]]], 0)[0] == 0 for e in v]) # input has form (0,✶,✶)
