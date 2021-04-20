@@ -669,6 +669,7 @@ if __name__ == "__main__":
     set_verbose(2)
     testing = 0
     compute_on_equivalent_random_system = True
+    add_field_equations = False
     box_type = ['default', 'random', 'iden'][0]
     gb_engin = ['magma', 'singular', 'sagef5', 'fgb'][0]
 
@@ -761,6 +762,8 @@ if __name__ == "__main__":
         time_sys = process_time() - time_sys
         if compute_on_equivalent_random_system:
             system = random_equivalent_system(system)
+        if add_field_equations:
+            system += [var^prime - var for var in system[0].parent().gens()]
         time_gb = process_time()
         if gb_engin == 'magma':
             magma.set_nthreads(8)
