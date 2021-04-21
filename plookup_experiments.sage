@@ -761,8 +761,10 @@ if __name__ == "__main__":
         system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False)
         time_sys = process_time() - time_sys
         if compute_on_equivalent_random_system:
+            print(f"[!] Replacing actual system by a random (but similar) one.")
             system = random_equivalent_system(system)
         if add_field_equations:
+            print(f"[!] Adding field equations.")
             system += [var^prime - var for var in system[0].parent().gens()]
         time_gb = process_time()
         if gb_engin == 'magma':
