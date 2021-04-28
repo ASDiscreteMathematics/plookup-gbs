@@ -153,6 +153,45 @@ class TestPlookupHash():
             assert ph._concrete_inv(ph.concrete(state, 1), 1) == state
         set_verbose(verb)
 
+def is_regular_sequence_magma(poly_system, give_reason=False):
+    '''
+    Determines if the given sequence of polynomials is a regular sequence. If the flag `give_reason` is set
+    to True, the method returns a boolean (the result) and a string containing further explanation why the
+    input is a regular sequence.
+    With `give_reason` set to `False`, only the boolean is returned.
+    '''
+    if len(poly_system) <= 0:
+        if give_reason: return True, "trivial system"
+        return True
+    if poly_system[0].is_unit() and len(poly_system) > 1:
+        if give_reason: return False, "first poly spans ring"
+        return False
+    ring = poly_system[0].parent()
+    for i in range(1, len(poly_system)):
+        quo_ring = ring.quo(Ideal(poly_system[:i]))
+        f = quo_ring(poly_system[i])
+        if f == 0:
+            if give_reason: return False, f"f_{i} is 0 mod f_0{', …' if i>2 else ''}{f', f_{i-1}' if i>1 else ''}"
+            return False
+        if magma.IsZeroDivisor(f).sage():
+            if give_reason: return False, f"f_{i} is in R/<f_0{', …' if i>2 else ''}{f', f_{i-1}' if i>1 else ''}>"
+            return False
+    if give_reason: return True, "is regular sequence"
+    return True
+
+def is_regular_sequence_m2(poly_system, give_reason=False):
+    '''
+    Determines if the given sequence of polynomials is a regular sequence. If the flag `give_reason` is set
+    to `True`, the method returns a boolean (the result) and string `(unknown)` since Macaulay2 does not
+    specify a reason. This flag is kept for compatability reasons.
+    With `give_reason` set to `False`, only the boolean is returned.
+    see also: https://faculty.math.illinois.edu/Macaulay2/doc/Macaulay2-1.17/share/doc/Macaulay2/Depth/html/_is__Regular__Sequence.html
+    '''
+    macaulay2('loadPackage "Depth"')
+    is_reg_seq = macaulay2.isRegularSequence(poly_system).sage()
+    if give_reason: return is_reg_seq, f"(unknown)"
+    return is_reg_seq
+
 def miller_rabin(n, k):
     # If number is even, it's a composite number
     if n == 2: return True
@@ -670,6 +709,7 @@ if __name__ == "__main__":
     testing = 0
     compute_on_equivalent_random_system = True
     add_field_equations = False
+    determine_is_regular_system = True
     box_type = ['default', 'random', 'iden'][0]
     gb_engin = ['magma', 'singular', 'sagef5', 'fgb'][0]
 
@@ -761,9 +801,22 @@ if __name__ == "__main__":
         time_sys = process_time()
         system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False)
         time_sys = process_time() - time_sys
+        if determine_is_regular_system:
+            print(f"[!] Remember: testing regularity for 'system[1:-1]', i.e., not including the layers of Concrete!")
+            is_reg_seq = is_regular_sequence_m2(system[1:-1])
+            print(f"[!] System is regular (macaulay2): {is_reg_seq}")
+        if determine_is_regular_system and gb_engin == "magma":
+            is_reg_seq, reason = is_regular_sequence_magma(system[1:-1], give_reason=True)
+            print(f"[!] System is regular (magma):     {is_reg_seq} because {reason}")
         if compute_on_equivalent_random_system:
             print(f"[!] Replacing actual system by a random (but similar) one.")
             system = random_equivalent_system(system)
+        if compute_on_equivalent_random_system and determine_is_regular_system:
+            is_reg_seq = is_regular_sequence_m2(system[1:-1])
+            print(f"[!] System is regular (macaulay2): {is_reg_seq}")
+        if compute_on_equivalent_random_system and determine_is_regular_system and gb_engin == "magma":
+            is_reg_seq, reason = is_regular_sequence_magma(system[1:-1], give_reason=True)
+            print(f"[!] System is regular (magma):     {is_reg_seq} because {reason}")
         if add_field_equations:
             print(f"[!] Adding field equations.")
             system += [var^prime - var for var in system[0].parent().gens()]
