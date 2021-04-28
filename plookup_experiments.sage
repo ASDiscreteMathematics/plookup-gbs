@@ -396,6 +396,31 @@ def bar_poly_system(order, decomposition, s_box):
     # system += [variables[0] - variables[num_vars//2]] # Bar(x) == x
     return system
 
+def bar_relaxed_poly_system(order, decomposition, s_box):
+    '''
+    Relaxed Bar polynomial system without the constraint x_i in ZZ_{s_i};
+    thus no constraint is imposed on x_i and all values in GF(p) are potentially valid values for x_i.
+    As a consequence, GB might be easier to compute but FGLM and factoring univariate polynomial might
+    be harder due to a higher number of solutions.
+    '''
+    num_s_boxes = len(decomposition)
+    num_vars = num_s_boxes*2 + 2
+    ring = PolynomialRing(GF(order), 'x', num_vars)
+    variables = ring.gens() # x, x_0, …, x_{n-1}, y, y_0, …, y_{n-1}
+    x = variables[0]
+    system =  [decomposition_poly(variables[:num_vars//2], decomposition)] # x and x_i correspond = decomposition
+    system += [decomposition_poly(variables[num_vars//2:], decomposition)] # y and y_i correspond = composition
+    s_min, s_max = min(decomposition), max(decomposition)
+    uni_ring = GF(order)[x] # lagrange interpolation only works in univariate rings in sage
+    s_box_points = [(i, s_box(i)) for i in range(s_max)]
+    for i in range(num_s_boxes):
+        x_i = variables[i + 1]
+        y_i = variables[i + 1 + num_s_boxes + 1]
+        s_i = decomposition[i]
+        uni_ring = GF(order)[x_i]
+        system += [ring(uni_ring.lagrange_polynomial(s_box_points[:s_i])) - y_i] # interpolate the S-Box
+    return system
+
 def test_bar_poly_system(prime=5701, sboxes=[84, 68], v=53):
     _ = None
     ph = PlookupHash(prime, _, _, sboxes, v)
@@ -707,19 +732,21 @@ def random_s_box_f(field_size, degree=5, terms=15):
 if __name__ == "__main__":
     set_verbose(2)
     testing = 0
-    compute_on_equivalent_random_system = True
+    compute_on_equivalent_random_system = False
     add_field_equations = False
-    determine_is_regular_system = True
+    determine_is_regular_system = False
     box_type = ['default', 'random', 'iden'][0]
-    gb_engin = ['magma', 'singular', 'sagef5', 'fgb'][0]
+    gb_engin = ['magma', 'singular', 'sagef5', 'fgb'][1]
 
     if gb_engin == 'sagef5': # try loading custem F5 implementation
-        if not os.path.exists('../gb_voodoo/'):
+        
+        #print("Current workdir:", working_dir)
+        if not os.path.exists('../gb-voodoo/'):
             print("The analytics in this file rely on GB_voodoo.")
             print("Please move the corresponding files into ../gb_voodoo.")
             exit(1)
         working_dir = os.getcwd()
-        os.chdir('../gb_voodoo')
+        os.chdir('../gb-voodoo')
         load('analyze.sage')
         os.chdir(working_dir)
 
@@ -799,7 +826,8 @@ if __name__ == "__main__":
             assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
             assert all([x >= v for x in ph._decompose(prime)]), f"For one of the decomposed parts, applying the f might cause an overflow."
         time_sys = process_time()
-        system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False)
+        #system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False)
+        system = bar_poly_system(prime, sboxes, ph._small_s_box)
         time_sys = process_time() - time_sys
         if determine_is_regular_system:
             print(f"[!] Remember: testing regularity for 'system[1:-1]', i.e., not including the layers of Concrete!")
@@ -828,9 +856,22 @@ if __name__ == "__main__":
             gb, degs = [mobj.sage() for mobj in (gb, degs)]
             print(degs)
         if gb_engin == 'singular':
-            gb = Ideal(system).groebner_basis()
+            nr_equs = len(system)
+            nr_vars = len(system[0].parent().gens())
+            print(f"Number of EQUS:", nr_equs)
+            print(f"Number of VARS:", nr_vars)
+            I = Ideal(system)
+            mac_bound = 1 + sum([p.degree()-1 for p in system])
+            print(f"Macaulay bound:", mac_bound)
+            if nr_equs > nr_vars:
+                print(f"Degree of Semi-Regularity:", I.degree_of_semi_regularity())
+            gb = I.groebner_basis('macaulay2:f4', prot=True)
+            #print("Series:", Ideal([f.homogenize() for f in system]).hilbert_series())
+            #print("Polynomial:", Ideal([f.homogenize() for f in system]).hilbert_polynomial())
+            #v = Ideal(system).variety()
+            #print("Solutions:", len(v))
         if gb_engin == 'sagef5':
-            gb = print_gb_analytics(system, verbosity=get_verbose(), write_to_disk=False, return_gb=True)
+            gb = print_gb_analytics(system, verbosity=get_verbose(), write_to_disk=False)
         if gb_engin == 'fgb':
             import fgb_sage
             gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
