@@ -828,7 +828,8 @@ if __name__ == "__main__":
             assert all([x >= v for x in ph._decompose(prime)]), f"For one of the decomposed parts, applying the f might cause an overflow."
         time_sys = process_time()
         #system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False)
-        system = bar_poly_system(prime, sboxes, ph._small_s_box)
+        #system = bar_poly_system(prime, sboxes, ph._small_s_box)
+        system = bar_relaxed_poly_system(order, decomposition, s_box)
         time_sys = process_time() - time_sys
         mac_bound = 1 + sum([p.degree() - 1 for p in system])
         if get_verbose() >= 1: print(f"Macaulay bound: {mac_bound}")
