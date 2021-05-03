@@ -736,16 +736,17 @@ if __name__ == "__main__":
     add_field_equations = False
     determine_is_regular_system = False
     box_type = ['default', 'random', 'iden'][0]
-    gb_engin = ['magma', 'singular', 'sagef5', 'fgb'][1]
+    gb_engin = ['magma', 'singular', 'sagef5', 'fgb', 'macaulay2'][1]
 
     if gb_engin == 'sagef5': # try loading custem F5 implementation
-        
-        #print("Current workdir:", working_dir)
+
+        working_dir = os.getcwd()
+        if get_verbose() >= 3: print(f"Current workdir: {working_dir}")
         if not os.path.exists('../gb-voodoo/'):
             print("The analytics in this file rely on GB_voodoo.")
-            print("Please move the corresponding files into ../gb_voodoo.")
+            print("Please move the corresponding files into ../gb-voodoo.")
+            print("Alternatively, change variable 'gb_engin' in this script.")
             exit(1)
-        working_dir = os.getcwd()
         os.chdir('../gb-voodoo')
         load('analyze.sage')
         os.chdir(working_dir)
@@ -829,6 +830,8 @@ if __name__ == "__main__":
         #system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False)
         system = bar_poly_system(prime, sboxes, ph._small_s_box)
         time_sys = process_time() - time_sys
+        mac_bound = 1 + sum([p.degree() - 1 for p in system])
+        if get_verbose() >= 1: print(f"Macaulay bound: {mac_bound}")
         if determine_is_regular_system:
             print(f"[!] Remember: testing regularity for 'system[1:-1]', i.e., not including the layers of Concrete!")
             is_reg_seq = is_regular_sequence_m2(system[1:-1])
@@ -848,6 +851,14 @@ if __name__ == "__main__":
         if add_field_equations:
             print(f"[!] Adding field equations.")
             system += [var^prime - var for var in system[0].parent().gens()]
+        if get_verbose() >= 2: print(f"Using Gröbner basis comupting engine '{gb_engin}'.")
+        num_equs = len(system)
+        num_vars = len(system[0].parent().gens())
+        if get_verbose() >= 0: print(f"Number of EQUS in system: {num_equs}")
+        if get_verbose() >= 0: print(f"Number of VARS in system: {num_vars}")
+        I = Ideal(system)
+        if num_equs > num_vars and get_verbose() >= 0:
+            print(f"Degree of Semi-Regularity:", I.degree_of_semi_regularity())
         time_gb = process_time()
         if gb_engin == 'magma':
             magma.set_nthreads(8)
@@ -856,32 +867,22 @@ if __name__ == "__main__":
             gb, degs = [mobj.sage() for mobj in (gb, degs)]
             print(degs)
         if gb_engin == 'singular':
-            nr_equs = len(system)
-            nr_vars = len(system[0].parent().gens())
-            print(f"Number of EQUS:", nr_equs)
-            print(f"Number of VARS:", nr_vars)
-            I = Ideal(system)
-            mac_bound = 1 + sum([p.degree()-1 for p in system])
-            print(f"Macaulay bound:", mac_bound)
-            if nr_equs > nr_vars:
-                print(f"Degree of Semi-Regularity:", I.degree_of_semi_regularity())
+            gb = Ideal(system).groebner_basis()
+        if gb_engin == 'macaulay2':
             gb = I.groebner_basis('macaulay2:f4', prot=True)
-            #print("Series:", Ideal([f.homogenize() for f in system]).hilbert_series())
-            #print("Polynomial:", Ideal([f.homogenize() for f in system]).hilbert_polynomial())
-            #v = Ideal(system).variety()
-            #print("Solutions:", len(v))
         if gb_engin == 'sagef5':
-            gb = print_gb_analytics(system, verbosity=get_verbose(), write_to_disk=False)
+            gb = print_gb_analytics(system, verbosity=get_verbose(), write_to_disk=False, return_gb=True)
         if gb_engin == 'fgb':
             import fgb_sage
             gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
             gb = list(gb)
         time_gb = process_time() - time_gb
-        # Testing for Conc-Bar-Conc input / output constraints
-        if testing >= 2 and not compute_on_equivalent_random_system:
+        if get_verbose() >= 1: print("Hilbert Series:", Ideal([f.homogenize() for f in system]).hilbert_series())
+        if get_verbose() >= 1: print("Hilbert Polynomial:", Ideal([f.homogenize() for f in system]).hilbert_polynomial())
+        if get_verbose() >= 2:
+            print("Computing variety…")
+        if get_verbose() >= 1:
             v = Ideal(gb).variety()
-            xs = system[0].parent().gens() # variables
-            assert all([ph._concrete_inv([e[xs[0]], e[xs[6]], e[xs[12]]], 0)[0] == 0 for e in v]) # input has form (0,✶,✶)
-            assert all([ph.concrete([e[xs[3]], e[xs[9]], e[xs[15]]], 1)[0] == 0 for e in v]) # output has form (0,✶,✶)
+            print("Number of solutions:", len(v))
         print(f"time sys: {time_sys}")
         print(f"time gb:  {time_gb}")
