@@ -730,7 +730,7 @@ def random_s_box_f(field_size, degree=5, terms=15):
     return s_box_f, f
 
 if __name__ == "__main__":
-    set_verbose(2)
+    set_verbose(1)
     testing = 0
     compute_on_equivalent_random_system = False
     add_field_equations = False
@@ -829,7 +829,7 @@ if __name__ == "__main__":
         time_sys = process_time()
         #system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False)
         #system = bar_poly_system(prime, sboxes, ph._small_s_box)
-        system = bar_relaxed_poly_system(order, decomposition, s_box)
+        system = bar_relaxed_poly_system(prime, sboxes, ph._small_s_box)
         time_sys = process_time() - time_sys
         mac_bound = 1 + sum([p.degree() - 1 for p in system])
         if get_verbose() >= 1: print(f"Macaulay bound: {mac_bound}")
@@ -855,8 +855,8 @@ if __name__ == "__main__":
         if get_verbose() >= 2: print(f"Using Gröbner basis comupting engine '{gb_engin}'.")
         num_equs = len(system)
         num_vars = len(system[0].parent().gens())
-        if get_verbose() >= 0: print(f"Number of EQUS in system: {num_equs}")
-        if get_verbose() >= 0: print(f"Number of VARS in system: {num_vars}")
+        if get_verbose() >= 0: print(f"Number of EQUS: {num_equs}")
+        if get_verbose() >= 0: print(f"Number of VARS: {num_vars}")
         I = Ideal(system)
         if num_equs > num_vars and get_verbose() >= 0:
             print(f"Degree of Semi-Regularity:", I.degree_of_semi_regularity())
@@ -878,11 +878,11 @@ if __name__ == "__main__":
             gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
             gb = list(gb)
         time_gb = process_time() - time_gb
-        if get_verbose() >= 1: print("Hilbert Series:", Ideal([f.homogenize() for f in system]).hilbert_series())
-        if get_verbose() >= 1: print("Hilbert Polynomial:", Ideal([f.homogenize() for f in system]).hilbert_polynomial())
+        if get_verbose() >= 2: print("Hilbert Series:", Ideal([f.homogenize() for f in system]).hilbert_series())
+        if get_verbose() >= 2: print("Hilbert Polynomial:", Ideal([f.homogenize() for f in system]).hilbert_polynomial())
         if get_verbose() >= 2:
             print("Computing variety…")
-        if get_verbose() >= 1:
+        if get_verbose() >= 2:
             v = Ideal(gb).variety()
             print("Number of solutions:", len(v))
         print(f"time sys: {time_sys}")
