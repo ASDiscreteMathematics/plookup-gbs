@@ -932,12 +932,11 @@ if __name__ == "__main__":
         if gb_engin == 'sagef5':
             gb = print_gb_analytics(system, verbosity=get_verbose(), write_to_disk=False, return_gb=True)
         if gb_engin == 'fgb':
-            import fgb_sage, os
+            import fgb_sage
             from stdout_redirector import stderr_redirector
-            with open(f'./.fgb_dbg.txt', 'w+b') as f, stderr_redirector(f): # TODO: get this to work with tempfile
+            with open(f'./fgb_dbg_(p={prime},v={v}).txt', 'w+b') as f, stderr_redirector(f):
                 gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
-            degs, matrix_dims, _, _, _, _, error_msg = parse_fgb_debug(f'./.fgb_dbg.txt')
-            os.unlink(f'./.fgb_dbg.txt')
+            degs, matrix_dims, _, _, _, _, error_msg = parse_fgb_debug(f'./fgb_dbg_(p={prime},v={v}).txt')
             if not degs: degs = [None]
             if get_verbose() >= 0: print(f"Maximum degree reached by FGb: {max(degs)}")
             if get_verbose() >= 3: print(f"Dimensions of matrices in FGb: {matrix_dims}")
