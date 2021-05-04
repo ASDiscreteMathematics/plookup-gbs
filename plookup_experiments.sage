@@ -865,8 +865,9 @@ if __name__ == "__main__":
             magma.set_nthreads(8)
             magma.set_verbose("Groebner", 4)
             gb, degs = magma.GroebnerBasis(system, Faugere=True, nvals=2)
-            gb, degs = [mobj.sage() for mobj in (gb, degs)]
-            print(degs)
+            gb, degs = gb.sage(), degs.sage()
+            if not degs: degs = [-1]
+            if get_verbose() >= 0: print(f"Maximum degree reached by magma: {max(degs)}")
         if gb_engin == 'singular':
             gb = Ideal(system).groebner_basis()
         if gb_engin == 'macaulay2':
