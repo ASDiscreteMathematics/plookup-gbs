@@ -737,6 +737,7 @@ if __name__ == "__main__":
     determine_is_regular_system = False
     box_type = ['default', 'random', 'iden'][0]
     gb_engin = ['magma', 'singular', 'sagef5', 'fgb', 'macaulay2'][1]
+    #            0        1           2         3      4
 
     if gb_engin == 'sagef5': # try loading custem F5 implementation
 
@@ -834,25 +835,24 @@ if __name__ == "__main__":
         mac_bound = 1 + sum([p.degree() - 1 for p in system])
         if get_verbose() >= 1: print(f"Macaulay bound: {mac_bound}")
         if determine_is_regular_system:
-            print(f"[!] Remember: testing regularity for 'system[1:-1]', i.e., not including the layers of Concrete!")
-            is_reg_seq = is_regular_sequence_m2(system[1:-1])
+            is_reg_seq = is_regular_sequence_m2(system)
             print(f"[!] System is regular (macaulay2): {is_reg_seq}")
         if determine_is_regular_system and gb_engin == "magma":
-            is_reg_seq, reason = is_regular_sequence_magma(system[1:-1], give_reason=True)
+            is_reg_seq, reason = is_regular_sequence_magma(system, give_reason=True)
             print(f"[!] System is regular (magma):     {is_reg_seq} because {reason}")
         if compute_on_equivalent_random_system:
             print(f"[!] Replacing actual system by a random (but similar) one.")
             system = random_equivalent_system(system)
         if compute_on_equivalent_random_system and determine_is_regular_system:
-            is_reg_seq = is_regular_sequence_m2(system[1:-1])
+            is_reg_seq = is_regular_sequence_m2(system)
             print(f"[!] System is regular (macaulay2): {is_reg_seq}")
         if compute_on_equivalent_random_system and determine_is_regular_system and gb_engin == "magma":
-            is_reg_seq, reason = is_regular_sequence_magma(system[1:-1], give_reason=True)
+            is_reg_seq, reason = is_regular_sequence_magma(system, give_reason=True)
             print(f"[!] System is regular (magma):     {is_reg_seq} because {reason}")
         if add_field_equations:
             print(f"[!] Adding field equations.")
             system += [var^prime - var for var in system[0].parent().gens()]
-        if get_verbose() >= 2: print(f"Using Gröbner basis comupting engine '{gb_engin}'.")
+        if get_verbose() >= 2: print(f"Using Gröbner basis computing engine '{gb_engin}'.")
         num_equs = len(system)
         num_vars = len(system[0].parent().gens())
         if get_verbose() >= 0: print(f"Number of EQUS: {num_equs}")
