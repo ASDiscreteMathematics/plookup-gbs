@@ -787,7 +787,7 @@ def random_s_box_f(field_size, degree=5, terms=15):
     return s_box_f, f
 
 if __name__ == "__main__":
-    set_verbose(1)
+    set_verbose(3)
     testing = 0
     compute_on_equivalent_random_system = False
     add_field_equations = False
@@ -936,10 +936,11 @@ if __name__ == "__main__":
             from stdout_redirector import stderr_redirector
             with open(f'./.fgb_dbg.txt', 'w+b') as f, stderr_redirector(f): # TODO: get this to work with tempfile
                 gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
-            degs, _, _, _, _, _, error_msg = parse_fgb_debug(f'./.fgb_dbg.txt')
+            degs, matrix_dims, _, _, _, _, error_msg = parse_fgb_debug(f'./.fgb_dbg.txt')
             os.unlink(f'./.fgb_dbg.txt')
             if not degs: degs = [None]
             if get_verbose() >= 0: print(f"Maximum degree reached by FGb: {max(degs)}")
+            if get_verbose() >= 3: print(f"Dimensions of matrices in FGb: {matrix_dims}")
             if error_msg and get_verbose() >= 0: print(f"Error message from FGb: {error_msg}")
             gb = list(gb)
         time_gb = process_time() - time_gb
