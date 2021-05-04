@@ -879,12 +879,13 @@ if __name__ == "__main__":
             gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
             gb = list(gb)
         time_gb = process_time() - time_gb
+        I = Ideal(gb) # depending on the method, the GB did not get buffered in I
+        if get_verbose() >= 1: print(f"Dimension of <system>: {I.dimension()}")
         if get_verbose() >= 2: print("Hilbert Series:", Ideal([f.homogenize() for f in system]).hilbert_series())
         if get_verbose() >= 2: print("Hilbert Polynomial:", Ideal([f.homogenize() for f in system]).hilbert_polynomial())
-        if get_verbose() >= 2:
+        if get_verbose() >= 2 and I.dimension() == 0:
             print("Computing variety…")
-        if get_verbose() >= 2:
-            v = Ideal(gb).variety()
+            v = I.variety()
             print("Number of solutions:", len(v))
         print(f"time sys: {time_sys}")
         print(f"time gb:  {time_gb}")
