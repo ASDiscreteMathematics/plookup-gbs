@@ -722,6 +722,60 @@ def random_equivalent_system(system, var_name='z', mon_order="degrevlex"):
     polys = [ring.random_element(d, t) for d, t in zip(degrees, num_terms)]
     return polys
 
+def parse_fgb_debug(file_path):
+    degrees, matrix_dims, time_lin, time_sym, time_total, time_sym_and_lin, error_msg = [], [], 0, 0, 0, 0, ""
+    f4_line = None
+    timing_line = None
+    with open(file_path) as file:
+        for line in file.readlines():
+            if not f4_line and len(line) > 0 and line[0] == '[':
+                f4_line = line.strip()
+            if not timing_line and len(line) > 13 and line[:13] == "Elapsed time:":
+                timing_line = line.strip()
+    if not f4_line: return degrees, matrix_dims, time_lin, time_sym, time_total, time_sym_and_lin, error_msg
+    for step in f4_line.split('['):
+        if len(step) <= 0: continue
+        if not 1 + step.find(']'):
+            error_msg += step
+            continue
+        if len(step.strip().split(']')) == 1:
+            d = step.strip().strip(']')
+            degrees += [int(d)]
+            continue
+        d, step = step.split(']')
+        degrees += [int(d)]
+        if not 1 + step.find(')'):
+            error_msg += step
+            continue
+        if len(step.strip().split(')')) == 1:
+            n, m = step.strip('(').strip(')').split('x')
+            matrix_dims += [(int(n), int(m))]
+            continue
+        dim, step = step.split(')')
+        n, m = dim.strip('(').split('x')
+        matrix_dims += [(int(n), int(m))]
+        if len(step) < 5 or step[-5:] == "100%/": continue # no timing information
+        if not 1 + step.find('100%/{'):
+            error_msg += step
+            continue
+        _, step = step.split('100%/{') # discard progress indicators of gaussing matrix
+        if 1 + step.find('}{'):
+            lin_or_sym, sym_or_lin, step = step.split('}')
+        else:
+            lin_or_sym, step = step.split('}')
+            sym_or_lin = r"{L=0.0}" # dummy data for more streamlined processing
+        for los in [lin_or_sym, sym_or_lin]:
+            los = los.strip('{').strip('}').strip('sec').strip()
+            los, t = los.split('=')
+            if los == 'L': time_lin += float(t)
+            if los == 'S': time_sym += float(t)
+        if len(step.strip()) > 0:
+            error_msg += step
+    if timing_line:
+        tot, sal = timing_line.strip("Elapsed time:").strip("(Total/Symb+Linalg)").strip().split('/')
+        time_total = float(tot.strip('s'))
+        time_sym_and_lin = float(sal.strip('s'))
+    return degrees, matrix_dims, time_lin, time_sym, time_total, time_sym_and_lin, error_msg
 
 def random_s_box_f(field_size, degree=5, terms=15):
     ring.<x> = GF(field_size)[]
@@ -737,6 +791,7 @@ if __name__ == "__main__":
     determine_is_regular_system = False
     box_type = ['default', 'random', 'iden'][0]
     gb_engin = ['magma', 'singular', 'sagef5', 'fgb', 'macaulay2'][1]
+    #            0        1           2         3      4
 
     if gb_engin == 'sagef5': # try loading custem F5 implementation
 
@@ -834,25 +889,24 @@ if __name__ == "__main__":
         mac_bound = 1 + sum([p.degree() - 1 for p in system])
         if get_verbose() >= 1: print(f"Macaulay bound: {mac_bound}")
         if determine_is_regular_system:
-            print(f"[!] Remember: testing regularity for 'system[1:-1]', i.e., not including the layers of Concrete!")
-            is_reg_seq = is_regular_sequence_m2(system[1:-1])
+            is_reg_seq = is_regular_sequence_m2(system)
             print(f"[!] System is regular (macaulay2): {is_reg_seq}")
         if determine_is_regular_system and gb_engin == "magma":
-            is_reg_seq, reason = is_regular_sequence_magma(system[1:-1], give_reason=True)
+            is_reg_seq, reason = is_regular_sequence_magma(system, give_reason=True)
             print(f"[!] System is regular (magma):     {is_reg_seq} because {reason}")
         if compute_on_equivalent_random_system:
             print(f"[!] Replacing actual system by a random (but similar) one.")
             system = random_equivalent_system(system)
         if compute_on_equivalent_random_system and determine_is_regular_system:
-            is_reg_seq = is_regular_sequence_m2(system[1:-1])
+            is_reg_seq = is_regular_sequence_m2(system)
             print(f"[!] System is regular (macaulay2): {is_reg_seq}")
         if compute_on_equivalent_random_system and determine_is_regular_system and gb_engin == "magma":
-            is_reg_seq, reason = is_regular_sequence_magma(system[1:-1], give_reason=True)
+            is_reg_seq, reason = is_regular_sequence_magma(system, give_reason=True)
             print(f"[!] System is regular (magma):     {is_reg_seq} because {reason}")
         if add_field_equations:
             print(f"[!] Adding field equations.")
             system += [var^prime - var for var in system[0].parent().gens()]
-        if get_verbose() >= 2: print(f"Using Gröbner basis comupting engine '{gb_engin}'.")
+        if get_verbose() >= 2: print(f"Using Gröbner basis computing engine '{gb_engin}'.")
         num_equs = len(system)
         num_vars = len(system[0].parent().gens())
         if get_verbose() >= 0: print(f"Number of EQUS: {num_equs}")
@@ -867,8 +921,9 @@ if __name__ == "__main__":
             magma.set_nthreads(8)
             magma.set_verbose("Groebner", 4)
             gb, degs = magma.GroebnerBasis(system, Faugere=True, nvals=2)
-            gb, degs = [mobj.sage() for mobj in (gb, degs)]
-            print(degs)
+            gb, degs = gb.sage(), degs.sage()
+            if not degs: degs = [None]
+            if get_verbose() >= 0: print(f"Maximum degree reached by magma: {max(degs)}")
         if gb_engin == 'singular':
             gb = Ideal(system).groebner_basis(algorithm="singular:std", prot=True)
         if gb_engin == 'macaulay2':
@@ -876,16 +931,24 @@ if __name__ == "__main__":
         if gb_engin == 'sagef5':
             gb = print_gb_analytics(system, verbosity=get_verbose(), write_to_disk=False, return_gb=True)
         if gb_engin == 'fgb':
-            import fgb_sage
-            gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
+            import fgb_sage, os
+            from stdout_redirector import stderr_redirector
+            with open(f'./.fgb_dbg.txt', 'w+b') as f, stderr_redirector(f): # TODO: get this to work with tempfile
+                gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
+            degs, _, _, _, _, _, error_msg = parse_fgb_debug(f'./.fgb_dbg.txt')
+            os.unlink(f'./.fgb_dbg.txt')
+            if not degs: degs = [None]
+            if get_verbose() >= 0: print(f"Maximum degree reached by FGb: {max(degs)}")
+            if error_msg and get_verbose() >= 0: print(f"Error message from FGb: {error_msg}")
             gb = list(gb)
         time_gb = process_time() - time_gb
+        I = Ideal(gb) # depending on the method, the GB did not get buffered in I
+        if get_verbose() >= 1: print(f"Dimension of <system>: {I.dimension()}")
         if get_verbose() >= 2: print("Hilbert Series:", Ideal([f.homogenize() for f in system]).hilbert_series())
         if get_verbose() >= 2: print("Hilbert Polynomial:", Ideal([f.homogenize() for f in system]).hilbert_polynomial())
-        if get_verbose() >= 2:
+        if get_verbose() >= 2 and I.dimension() == 0:
             print("Computing variety…")
-        if get_verbose() >= 2:
-            v = Ideal(gb).variety()
+            v = I.variety()
             print("Number of solutions:", len(v))
         for p in gb:
             print(p)
