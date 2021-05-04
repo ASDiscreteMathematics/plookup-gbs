@@ -790,7 +790,7 @@ if __name__ == "__main__":
     add_field_equations = False
     determine_is_regular_system = False
     box_type = ['default', 'random', 'iden'][0]
-    gb_engin = ['magma', 'singular', 'sagef5', 'fgb', 'macaulay2'][1]
+    gb_engin = ['magma', 'singular', 'sagef5', 'fgb', 'macaulay2'][3]
     #            0        1           2         3      4
 
     if gb_engin == 'sagef5': # try loading custem F5 implementation
@@ -911,8 +911,6 @@ if __name__ == "__main__":
         num_vars = len(system[0].parent().gens())
         if get_verbose() >= 0: print(f"Number of EQUS: {num_equs}")
         if get_verbose() >= 0: print(f"Number of VARS: {num_vars}")
-        for p in system:
-            print(p)
         I = Ideal(system)
         if num_equs > num_vars and get_verbose() >= 0:
             print(f"Degree of Semi-Regularity:", I.degree_of_semi_regularity())
@@ -950,7 +948,5 @@ if __name__ == "__main__":
             print("Computing variety…")
             v = I.variety()
             print("Number of solutions:", len(v))
-        for p in gb:
-            print(p)
         print(f"time sys: {time_sys}")
         print(f"time gb:  {time_gb}")
