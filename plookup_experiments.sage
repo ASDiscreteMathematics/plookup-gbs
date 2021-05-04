@@ -950,3 +950,5 @@ if __name__ == "__main__":
             print("Number of solutions:", len(v))
         print(f"time sys: {time_sys}")
         print(f"time gb:  {time_gb}")
+        print(f"#non-zero coeffs: {sum([len(p.coefficients()) for p in gb])}")
+        print(f"length of GB:     {len(gb)}")
