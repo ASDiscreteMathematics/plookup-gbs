@@ -548,7 +548,7 @@ def test_conc_bar_conc_poly_system(prime=5701,
         assert not any([p(vals) for p in polys])
     if get_verbose() >= 2: print(f"Testing of Conc-Bar-Conc's poly system complete.")
 
-def conc_bar_conc_rebound_prep_poly_system(order, constants, mult_matrix, decomposition, s_box, in_out_equal=False):
+def conc_bar_conc_rebound_prep_poly_system(order, constants, mult_matrix, decomposition, s_box, in_out_equal=False, use_relaxed_system=False):
     '''
     Instead of fully modelling Concrete, add one equation at the beginning and one at the end
     ensuring that the state has form (0,✶,✶) ––[Conc-Bar-Conc]–→ (0,✶,✶).
@@ -574,7 +574,10 @@ def conc_bar_conc_rebound_prep_poly_system(order, constants, mult_matrix, decomp
     for s in range(state_size):
         shift_dict_bar = {var[i] : var[i + s*(num_s_boxes*2 + 2)] for i in range(num_s_boxes*2 + 2)} # take next free variables
         all_shift_dict_bar += [shift_dict_bar]
-    bar_sys = bar_relaxed_poly_system(order, decomposition, s_box)
+    bar_sys = bar_poly_system(order, decomposition, s_box)
+    if use_relaxed_system:
+        if get_verbose() >= 3: print(f"[!] Using relaxed polynomial system in Conc-Bar-Conc")
+        bar_sys = bar_relaxed_poly_system(order, decomposition, s_box)
     conc_0_out_vars = [var[s*(num_s_boxes*2 + 2)] for s in range(state_size)]
     ph = PlookupHash(order, constants, mult_matrix, None, None)
     conc_0_in_0 = ph._concrete_inv(conc_0_out_vars, 0)[0]
@@ -882,7 +885,7 @@ if __name__ == "__main__":
             assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
             assert all([x >= v for x in ph._decompose(prime)]), f"For one of the decomposed parts, applying the f might cause an overflow."
         time_sys = process_time()
-        system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False)
+        system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False, use_relaxed_system=True)
         #system = bar_poly_system(prime, sboxes, ph._small_s_box)
         #system = bar_relaxed_poly_system(prime, sboxes, ph._small_s_box)
         time_sys = process_time() - time_sys
