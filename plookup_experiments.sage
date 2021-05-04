@@ -405,7 +405,7 @@ def bar_relaxed_poly_system(order, decomposition, s_box):
     '''
     num_s_boxes = len(decomposition)
     num_vars = num_s_boxes*2 + 2
-    ring = PolynomialRing(GF(order), 'x', num_vars)
+    ring = PolynomialRing(GF(order), 'x', num_vars, order="lex")
     variables = ring.gens() # x, x_0, …, x_{n-1}, y, y_0, …, y_{n-1}
     x = variables[0]
     system =  [decomposition_poly(variables[:num_vars//2], decomposition)] # x and x_i correspond = decomposition
@@ -574,7 +574,7 @@ def conc_bar_conc_rebound_prep_poly_system(order, constants, mult_matrix, decomp
     for s in range(state_size):
         shift_dict_bar = {var[i] : var[i + s*(num_s_boxes*2 + 2)] for i in range(num_s_boxes*2 + 2)} # take next free variables
         all_shift_dict_bar += [shift_dict_bar]
-    bar_sys = bar_poly_system(order, decomposition, s_box)
+    bar_sys = bar_relaxed_poly_system(order, decomposition, s_box)
     conc_0_out_vars = [var[s*(num_s_boxes*2 + 2)] for s in range(state_size)]
     ph = PlookupHash(order, constants, mult_matrix, None, None)
     conc_0_in_0 = ph._concrete_inv(conc_0_out_vars, 0)[0]
@@ -827,9 +827,9 @@ if __name__ == "__main__":
             assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
             assert all([x >= v for x in ph._decompose(prime)]), f"For one of the decomposed parts, applying the f might cause an overflow."
         time_sys = process_time()
-        #system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False)
+        system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False)
         #system = bar_poly_system(prime, sboxes, ph._small_s_box)
-        system = bar_relaxed_poly_system(prime, sboxes, ph._small_s_box)
+        #system = bar_relaxed_poly_system(prime, sboxes, ph._small_s_box)
         time_sys = process_time() - time_sys
         mac_bound = 1 + sum([p.degree() - 1 for p in system])
         if get_verbose() >= 1: print(f"Macaulay bound: {mac_bound}")
@@ -857,6 +857,8 @@ if __name__ == "__main__":
         num_vars = len(system[0].parent().gens())
         if get_verbose() >= 0: print(f"Number of EQUS: {num_equs}")
         if get_verbose() >= 0: print(f"Number of VARS: {num_vars}")
+        for p in system:
+            print(p)
         I = Ideal(system)
         if num_equs > num_vars and get_verbose() >= 0:
             print(f"Degree of Semi-Regularity:", I.degree_of_semi_regularity())
@@ -868,7 +870,7 @@ if __name__ == "__main__":
             gb, degs = [mobj.sage() for mobj in (gb, degs)]
             print(degs)
         if gb_engin == 'singular':
-            gb = Ideal(system).groebner_basis()
+            gb = Ideal(system).groebner_basis(algorithm="singular:std", prot=True)
         if gb_engin == 'macaulay2':
             gb = I.groebner_basis('macaulay2:f4', prot=True)
         if gb_engin == 'sagef5':
@@ -885,5 +887,7 @@ if __name__ == "__main__":
         if get_verbose() >= 2:
             v = Ideal(gb).variety()
             print("Number of solutions:", len(v))
+        for p in gb:
+            print(p)
         print(f"time sys: {time_sys}")
         print(f"time gb:  {time_gb}")
