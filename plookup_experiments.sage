@@ -21,36 +21,32 @@ class PlookupHash():
             set_verbose(verb)
 
     def __call__(self, state):
-        brick, concrete, bar = self.brick, self.concrete, self.bar
-        state = concrete(state, 0)
-        state = brick(state)
-        state = concrete(state, 1)
-        state = brick(state)
-        state = concrete(state, 2)
-        state = bar(state)
-        state = concrete(state, 3)
-        state = brick(state)
-        state = concrete(state, 4)
-        state = brick(state)
-        state = concrete(state, 5)
+        state = self.concrete(state, 0)
+        state = self.brick(state)
+        state = self.concrete(state, 1)
+        state = self.brick(state)
+        state = self.concrete(state, 2)
+        state = self.bar(state)
+        state = self.concrete(state, 3)
+        state = self.brick(state)
+        state = self.concrete(state, 4)
+        state = self.brick(state)
+        state = self.concrete(state, 5)
         return state
 
     def _compose(self, dec):
-        sboxes = self.sboxes
-        t = len(sboxes)
         x = 0
-        for i in range(t):
-            x *= sboxes[i]
+        for i in range(len(self.sboxes)):
+            x *= self.sboxes[i]
             x += dec[i]
         return x
 
     def _decompose(self, x):
-        sboxes = self.sboxes
-        t = len(sboxes)
+        t = len(self.sboxes)
         dec = [0]*t
         for k in range(t-1, -1, -1):
-            dec[k] = x % sboxes[k]
-            x = (x - dec[k]) // sboxes[k]
+            dec[k] = x % self.sboxes[k]
+            x = (x - dec[k]) // self.sboxes[k]
         return dec
 
     def _small_s_box(self, x):
@@ -59,47 +55,33 @@ class PlookupHash():
         return x
 
     def _bar_function(self, x):
-        order = self.order
-        sboxes = self.sboxes
-        compose = self._compose
-        decompose = self._decompose
-        s_box = self._small_s_box
-        v = self.v
-        x = decompose(x)
-        x = [s_box(y) for y in x]
-        x = compose(x)
-        return x % order
+        x_dec = self._decompose(x)
+        x_bxs = [self._small_s_box(y) for y in x_dec]
+        y_out = self._compose(x_bxs)
+        return y_out % self.order
 
     def bar(self, state):
-        order = self.order
-        sboxes = self.sboxes
-        v = self.v
         new_state = [self._bar_function(x) for x in state]
         return new_state
 
     def brick(self, state):
-        order = self.order
         x, y, z = state
-        a = z**5 % order
-        b = x*(z**2 + 1*z + 2) % order
-        c = y*(x**2 + 3*x + 4) % order
+        a = z**5 % self.order
+        b = x*(z**2 + 1*z + 2) % self.order
+        c = y*(x**2 + 3*x + 4) % self.order
         return [a, b, c]
 
     def concrete(self, state, cnst_idx):
-        order = self.order
-        matrix = self.matrix
         new_state = vector(self.constants[cnst_idx])
-        new_state += matrix * vector(state)
-        new_state = [s % order for s in new_state]
+        new_state += self.matrix * vector(state)
+        new_state = [s % self.order for s in new_state]
         return new_state
 
     def _concrete_inv(self, state, cnst_idx):
-        order = self.order
-        matrix_inv = self.matrix_inv
-        constants = [GF(order)(c) for c in self.constants[cnst_idx]]
+        constants = [GF(self.order)(c) for c in self.constants[cnst_idx]]
         new_state = vector(state) - vector(constants)
         new_state = [s-c for s, c in zip(state, constants)]
-        new_state = matrix_inv * vector(new_state)
+        new_state = self.matrix_inv * vector(new_state)
         return list(new_state)
 
 class TestPlookupHash():
