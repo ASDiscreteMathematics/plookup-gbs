@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import sys
 import random
-from time import process_time
+from time import time, process_time
 
 class PlookupHash():
     def __init__(self, order, constants, mult_matrix, sboxes, v, s_box_f=None):
@@ -769,7 +770,7 @@ def random_s_box_f(field_size, degree=5, terms=15):
     return s_box_f, f
 
 if __name__ == "__main__":
-    set_verbose(3)
+    set_verbose(2)
     testing = 0
     compute_on_equivalent_random_system = False
     add_field_equations = False
@@ -779,7 +780,6 @@ if __name__ == "__main__":
     #            0        1           2         3      4
 
     if gb_engin == 'sagef5': # try loading custem F5 implementation
-
         working_dir = os.getcwd()
         if get_verbose() >= 3: print(f"Current workdir: {working_dir}")
         if not os.path.exists('../gb-voodoo/'):
@@ -822,6 +822,8 @@ if __name__ == "__main__":
         (131, 11, [12, 11]), # composition of [11, 11] is 132 ⇒ not a field element
         (167, 11, [13, 13]),
     ]
+
+    prime_dec_list = [(10^6+3, v, [1003, 998]) for v in primes(212, 1000)]
 
     constants = [
         [3**100, 2**100, 5**50],
@@ -866,11 +868,13 @@ if __name__ == "__main__":
             tmp = ph._compose([v]*len(sboxes))
             assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
             assert all([x >= v for x in ph._decompose(prime)]), f"For one of the decomposed parts, applying the f might cause an overflow."
-        time_sys = process_time()
-        system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False, use_relaxed_system=True)
-        #system = bar_poly_system(prime, sboxes, ph._small_s_box)
+        time_sys = time()
+        # system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False, use_relaxed_system=False)
+        system = bar_poly_system(prime, sboxes, ph._small_s_box)
         #system = bar_relaxed_poly_system(prime, sboxes, ph._small_s_box)
-        time_sys = process_time() - time_sys
+        time_sys = time() - time_sys
+        # [print(f"{p.degree()} – {len(p.coefficients())}") for p in system]
+        # [print(f"{p}") for p in system]
         mac_bound = 1 + sum([p.degree() - 1 for p in system])
         if get_verbose() >= 1: print(f"Macaulay bound: {mac_bound}")
         if determine_is_regular_system:
@@ -899,7 +903,8 @@ if __name__ == "__main__":
         I = Ideal(system)
         if num_equs > num_vars and get_verbose() >= 0:
             print(f"Degree of Semi-Regularity:", I.degree_of_semi_regularity())
-        time_gb = process_time()
+        time_gb = time()
+        time_gb_process = process_time()
         if gb_engin == 'magma':
             magma.set_nthreads(8)
             magma.set_verbose("Groebner", 4)
@@ -907,6 +912,7 @@ if __name__ == "__main__":
             gb, degs = gb.sage(), degs.sage()
             if not degs: degs = [None]
             if get_verbose() >= 0: print(f"Maximum degree reached by magma: {max(degs)}")
+            if get_verbose() >= 0: print(f"We built this many matrices:     {len(degs)}")
         if gb_engin == 'singular':
             gb = Ideal(system).groebner_basis(algorithm="singular:std", prot=True)
         if gb_engin == 'macaulay2':
@@ -921,19 +927,27 @@ if __name__ == "__main__":
             degs, matrix_dims, _, _, _, _, error_msg = parse_fgb_debug(f'./fgb_dbg_(p={prime},v={v}).txt')
             if not degs: degs = [None]
             if get_verbose() >= 0: print(f"Maximum degree reached by FGb: {max(degs)}")
+            if get_verbose() >= 0: print(f"We built this many matrices:   {len(matrix_dims)}")
+            if get_verbose() >= 0: print(f"Biggest matrix we built:       {max(matrix_dims, key=lambda el: el[0]*el[1])}")
             if get_verbose() >= 3: print(f"Dimensions of matrices in FGb: {matrix_dims}")
             if error_msg and get_verbose() >= 0: print(f"Error message from FGb: {error_msg}")
             gb = list(gb)
-        time_gb = process_time() - time_gb
+        time_gb_process = process_time() - time_gb_process
+        time_gb = time() - time_gb
+        # [print(f"{p.degree()} – {len(p.coefficients())}") for p in gb]
         I = Ideal(gb) # depending on the method, the GB did not get buffered in I
-        if get_verbose() >= 1: print(f"Dimension of <system>: {I.dimension()}")
-        if get_verbose() >= 2: print("Hilbert Series:", Ideal([f.homogenize() for f in system]).hilbert_series())
-        if get_verbose() >= 2: print("Hilbert Polynomial:", Ideal([f.homogenize() for f in system]).hilbert_polynomial())
-        if get_verbose() >= 2 and I.dimension() == 0:
-            print("Computing variety…")
-            v = I.variety()
-            print("Number of solutions:", len(v))
+        # if get_verbose() >= 1: print(f"Dimension of <system>: {I.dimension()}")
+        # if get_verbose() >= 2: print("Hilbert Series:", Ideal([f.homogenize() for f in system]).hilbert_series())
+        # if get_verbose() >= 2: print("Hilbert Polynomial:", Ideal([f.homogenize() for f in system]).hilbert_polynomial())
+        # if get_verbose() >= 2 and I.dimension() == 0:
+        #     print("Computing variety…")
+        #     v = I.variety()
+        #     print("Number of solutions:", len(v))
         print(f"time sys: {time_sys}")
         print(f"time gb:  {time_gb}")
-        print(f"#non-zero coeffs: {sum([len(p.coefficients()) for p in gb])}")
-        print(f"length of GB:     {len(gb)}")
+        # print(f"#non-zero coeffs: {sum([len(p.coefficients()) for p in gb])}")
+        # print(f"length of GB:     {len(gb)}")
+        sys.stdout.flush()
+        with open('plot_me.csv', 'a+') as plot_me:
+            plot_me.write(f"{v},{time_gb},{time_gb_process}\n")
+
