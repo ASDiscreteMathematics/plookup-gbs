@@ -1,9 +1,47 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import os
 import sys
 import random
-from time import time, process_time
+import pathlib
+import fgb_sage
+import subprocess
+from time import sleep, process_time, time
+from multiprocessing import Process, Pipe
+from stdout_redirector import stdout_redirector, stderr_redirector
+
+class MemoryMonitor:
+    @staticmethod
+    def check_pid(pid):
+        """ Check For the existence of a unix pid. """
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        else:
+            return True
+
+    def __init__(self, debug_path, sleep_time=1):
+        self.debug_path = debug_path
+        self.sleep_time = sleep_time
+        self.max_usage = 0
+
+    def measure_usage(self, pid, pipe):
+        debug_path, sleep_time = self.debug_path, self.sleep_time
+        max_usage = 0
+        with open(debug_path + "mem.txt", 'w') as debug_file:
+            while MemoryMonitor.check_pid(pid):
+                ps_res = subprocess.run(["ps", "-p", f"{pid}", "-o", "rss="], capture_output=True, text=True)
+                if MemoryMonitor.check_pid(pid): # make sure that ps returns parseable output: process to maesure has to live before and after running ps
+                    cur_usage = int(ps_res.stdout)
+                    max_usage = max(max_usage, cur_usage)
+                    debug_file.write(f"{cur_usage}\n")
+                    debug_file.flush()
+                    sleep(sleep_time)
+        self.max_usage = max_usage
+        pipe.send(max_usage)
+        return max_usage
 
 class PlookupHash():
     def __init__(self, order, constants, mult_matrix, sboxes, v, s_box_f=None):
@@ -437,9 +475,7 @@ def conc_poly_system(order, constants, mult_matrix):
     polys = [ constants[i] + mult_matrix[i]*invars - var[i+state_size] for i in range(state_size)]
     return polys
 
-def test_conc_poly_system(prime=5701,
-                          constants=[[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]],
-                          mult_matrix=matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]])):
+def test_conc_poly_system(prime=5701, constants=[[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]], mult_matrix=matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]])):
     assert all([len(constants[0]) == len(constants[i]) for i in range(len(constants))]), f"All constants' vectors need to be of the same length."
     assert len(constants[0]) == mult_matrix.nrows(), f"Dimensions of constants and matrix mismatch: {len(constants[0])} vs {mult_matrix.nrows()}"
     _ = None
@@ -505,11 +541,7 @@ def conc_bar_conc_poly_system(order, constants, mult_matrix, decomposition, s_bo
     system += [ring(p).subs(shift_dict_conc) for p in conc_sys_1]
     return system
 
-def test_conc_bar_conc_poly_system(prime=5701,
-                                   constants=[[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]],
-                                   mult_matrix=matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]]),
-                                   s_boxes=[84, 68],
-                                   v=53):
+def test_conc_bar_conc_poly_system(prime=5701, constants=[[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]], mult_matrix=matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]]), s_boxes=[84, 68], v=53):
     '''
     Randomized testing of the Concrete-Bar-Concrete polynomial system.
     '''
@@ -579,11 +611,7 @@ def conc_bar_conc_rebound_prep_poly_system(order, constants, mult_matrix, decomp
         system += [conc_0_in_0 - conc_1_out_0] # first input element and first output element need to be equal
     return system
 
-def test_conc_bar_conc_rebound_prep_poly_system(prime=5701,
-                                                constants=[[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]],
-                                                mult_matrix=matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]]),
-                                                s_boxes=[84, 68],
-                                                v=53):
+def test_conc_bar_conc_rebound_prep_poly_system(prime=5701, constants=[[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]], mult_matrix=matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]]), s_boxes=[84, 68], v=53):
     '''
     Randomzied testing of the variable-optimized Concrete-Bar-Concrete polynomial system, as far
     as computationally possible. In particular, the output constraint (0,✶,✶) is not tested against,
@@ -626,11 +654,7 @@ def conc_bar_poly_system(order, constants, mult_matrix, decomposition, s_box):
         system += [ring(p).subs(shift_dict_bar) for p in bar_sys]
     return system
 
-def test_conc_bar_poly_system(prime=5701,
-                              constants=[[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]],
-                              mult_matrix=matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]]),
-                              s_boxes=[84, 68],
-                              v=53):
+def test_conc_bar_poly_system(prime=5701, constants=[[3**100, 2**100, 5**50], [3**110, 2**110, 5**60]], mult_matrix=matrix([[2, 1, 1], [1, 2, 1], [1, 1, 2]]), s_boxes=[84, 68], v=53):
     constants = [[c % prime for c in cnts] for cnts in constants]
     state_size = len(constants[0])
     ph = PlookupHash(prime, constants, mult_matrix, s_boxes, v)
@@ -763,67 +787,171 @@ def parse_fgb_debug(file_path):
         time_sym_and_lin = float(sal.strip('s'))
     return degrees, matrix_dims, time_lin, time_sym, time_total, time_sym_and_lin, error_msg
 
-def random_s_box_f(field_size, degree=5, terms=15):
-    ring.<x> = GF(field_size)[]
-    f = ring.random_element(degree, terms)
-    s_box_f = lambda x: int(f(x))
-    return s_box_f, f
+def test_decomposition_for_collisions(ph):
+    prime, v, sboxes = ph.order, ph.v, ph.sboxes
+    # Do sboxes and prime correspond?
+    tmp = reduce(operator.mul, s_boxes, 1)
+    assert tmp >= prime, f"[!] S-Boxes too restrictive: {tmp} < {prime}"
+    tmp = ph._compose([v]*len(s_boxes))
+    assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
+    assert all([x >= v for x in ph._decompose(prime)]), f"For one of the decomposed parts, applying the f might cause an overflow."
+
+def get_s_box_f(box_type, v):
+    if box_type == 'random':
+        ring.<x> = GF(v)[]
+        f = ring.random_element(v, 2*v) # degree=v, terms=2*v
+        s_box_f = lambda x: int(f(x))
+        s_box_desc = f
+    elif box_type == 'iden':
+        s_box_f, s_box_desc = lambda x: x, 'ID'
+    else: # default
+        s_box_f, s_box_desc = None, f"x^(v-2) % v"
+    if get_verbose() >= 2: print(f"f in sbox = {s_box_desc}")
+    return s_box_f
+
+def test_all(run_tests):
+    if run_tests:
+        TestPlookupHash()
+        test_decomposeField()
+        test_interval_polynomial()
+        test_maybe_invert_by_v_poly()
+        test_decomposition_poly()
+        test_bar_poly_system()
+        test_conc_poly_system()
+        test_brick_poly_system()
+        test_conc_bar_conc_poly_system()
+        test_conc_bar_conc_rebound_prep_poly_system()
+        test_conc_bar_poly_system()
+    elif get_verbose() >= 2:
+        print(f"No tests performed.")
+
+class ExperimentStarter:
+    def __init__(self, result_path):
+        self.result_path = result_path
+
+    def __call__(self, system_type, prime, sboxes, s_box, gb_engine="fgb"):
+        result_path = self.result_path
+        if get_verbose() >= 1: print(f"Starting experiment with {system_type} over F_{prime} and v={v} with S_i={sboxes}.")
+        time_sys = process_time()
+        system = self.get_system(system_type, prime, sboxes, s_box)
+        time_sys = process_time() - time_sys
+        with open(result_path + "sys.txt", 'w') as f:
+            for p in system:
+                f.write(f"{p}\n")
+        # summary: preliminary
+        with open(result_path + "summary.txt", 'w') as f:
+            f.write(f"macaulay bound:    {1 + sum([p.degree() - 1 for p in system])}\n")
+            f.write(f"time system:       {time_sys}\n")
+            f.write(f"len system:        {len(system)}\n")
+            sys_degs = [p.degree() for p in system]
+            f.write(f"max deg in system: {max(sys_degs)}\n")
+            sys_histogram = {x: sys_degs.count(x) for x in range(min(sys_degs), max(sys_degs)+1)}
+            f.write(f"deg histogram:     {sys_histogram}\n")
+            f.write(f"#coeffs in system: {sum([len(p.coefficients()) for p in system])}\n")
+        time_gb = time()
+        time_gb_process = process_time()
+        gb = self.compute_gb(system, result_path, gb_engine)
+        time_gb_process = process_time() - time_gb_process
+        time_gb = time() - time_gb
+        # summary: stuff about the Gröbner basis
+        pid = os.getpid()
+        ps_res = subprocess.run(["ps", "-p", f"{pid}", "-o", "cputimes="], capture_output=True, text=True)
+        cputimes = int(ps_res.stdout)
+        ps_res = subprocess.run(["ps", "-p", f"{pid}", "-o", "etimes="], capture_output=True, text=True)
+        etimes = int(ps_res.stdout)
+        with open(result_path + "summary.txt", 'a') as f:
+            f.write(f" –––\n")
+            f.write(f"cpu time:          {cputimes}s\n")
+            f.write(f"wall time:         {etimes}s\n")
+            f.write(f"time gb:           {time_gb}\n")
+            f.write(f"time gb (process): {time_gb_process}\n")
+            f.write(f"len gb:            {len(gb)}\n")
+            gb_degs = [p.degree() for p in gb]
+            f.write(f"max deg in gb:     {max(gb_degs)}\n")
+            gb_histogram = {x: gb_degs.count(x) for x in range(min(gb_degs), max(gb_degs)+1)}
+            f.write(f"deg histogram:     {gb_histogram}\n")
+            f.write(f"#coeffs in gb:     {sum([len(p.coefficients()) for p in gb])}\n")
+
+    def get_system(self, system_type, prime, sboxes, s_box):
+        if get_verbose() >= 2: print(f"Retrieving polynomial system for {system_type}…")
+        if system_type == "bar":
+            system = bar_poly_system(prime, sboxes, s_box)
+        elif system_type == "bar_relaxed":
+            system = bar_relaxed_poly_system(prime, sboxes, s_box)
+        elif system_type == "conc":
+            system = conc_poly_system(prime, constants, mult_matrix)
+        elif system_type == "brick":
+            system = brick_poly_system(prime, state_size=3)
+        elif system_type == "conc_bar_conc":
+            system = conc_bar_conc_poly_system(prime, constants, mult_matrix, sboxes, s_box)
+        elif system_type == "conc_bar_conc_rebound_prep":
+            system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, s_box, in_out_equal=False, use_relaxed_system=False)
+        elif system_type == "conc_bar":
+            system = conc_bar_poly_system(prime, constants, mult_matrix, sboxes, s_box)
+        elif system_type == "bar_pow_bar":
+            system = bar_pow_bar_poly_system(prime, sboxes, s_box, exponent=5)
+        elif system_type == "lbar_pow_rbar":
+            system = lbar_pow_rbar_poly_system(prime, sboxes, s_box, exponent=5)
+        else:
+            raise ValueError(f"No system with name {system_type} defined.")
+        return system
+
+    def compute_gb(self, system, debug_path, gb_engine):
+        if get_verbose() >= 2: print(f"Starting Gröbner basis computation…")
+        if gb_engine == 'magma':
+            magma.set_nthreads(8)
+            magma.set_verbose("Groebner", get_verbose())
+            gb, degs = magma.GroebnerBasis(system, Faugere=True, nvals=2)
+            gb = gb.sage()
+            degs = degs.sage() or [None]
+            with open(debug_path + "gb_comp_out.txt", 'w+') as f:
+                f.write(f"{degs}")
+        elif gb_engine == 'singular':
+            with open(debug_path + "gb_comp_out.txt", 'w+b', buffering=0) as f, stdout_redirector(f):
+                gb = Ideal(system).groebner_basis(algorithm="singular:std", prot=True)
+        elif gb_engine == 'macaulay2':
+            with open(debug_path + "gb_comp_out.txt", 'w+b', buffering=0) as f, stdout_redirector(f):
+                gb = I.groebner_basis('macaulay2:f4', prot=True)
+        elif gb_engine == 'sagef5':
+            working_dir = os.getcwd()
+            if get_verbose() >= 3: print(f"Current workdir: {working_dir}")
+            if not os.path.exists('../gb-voodoo/'):
+                print("The analytics in this file rely on GB_voodoo.", file=sys.stderr)
+                print("Please move the corresponding files into ../gb-voodoo.", file=sys.stderr)
+                print("Alternatively, change variable 'gb_engin' in this script.", file=sys.stderr)
+                return [None]
+            os.chdir('../gb-voodoo')
+            load('analyze.sage')
+            os.chdir(working_dir)
+            with open(debug_path + "gb_comp_out.txt", 'w+b', buffering=0) as f, stdout_redirector(f):
+                gb = print_gb_analytics(system, verbosity=get_verbose(), write_to_disk=False, return_gb=True)
+        elif gb_engine == 'fgb':
+            with open(debug_path + "gb_comp_out.txt", 'w+b', buffering=0) as f, stderr_redirector(f):
+                gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose(), matrix_bound=10**6)
+            gb = list(gb)
+        else:
+            raise ValueError(f"No Gröbner basis computing engine called {gb_engine}.")
+        if get_verbose() >= 2: print(f"Finished computing Gröbner basis.")
+        return gb
 
 if __name__ == "__main__":
     set_verbose(2)
-    testing = 0
+    test_all(False)
+    test_decomposition_for_collisions = False
     compute_on_equivalent_random_system = False
     add_field_equations = False
     determine_is_regular_system = False
     box_type = ['default', 'random', 'iden'][0]
-    gb_engin = ['magma', 'singular', 'sagef5', 'fgb', 'macaulay2'][3]
+    #            0          1         2
+    gb_engin = ['magma', 'singular', 'sagef5', 'fgb', 'macaulay2'][0]
     #            0        1           2         3      4
+    system_types = ['bar', 'bar_relaxed', 'conc', 'brick', 'conc_bar_conc']
+    #               0      1              2       3        4
+    system_types += ['conc_bar_conc_rebound_prep', 'conc_bar', 'bar_pow_bar', 'lbar_pow_rbar']
+    #                5                             6           7              8
+    system_type = system_types[0]
 
-    if gb_engin == 'sagef5': # try loading custem F5 implementation
-        working_dir = os.getcwd()
-        if get_verbose() >= 3: print(f"Current workdir: {working_dir}")
-        if not os.path.exists('../gb-voodoo/'):
-            print("The analytics in this file rely on GB_voodoo.")
-            print("Please move the corresponding files into ../gb-voodoo.")
-            print("Alternatively, change variable 'gb_engin' in this script.")
-            exit(1)
-        os.chdir('../gb-voodoo')
-        load('analyze.sage')
-        os.chdir(working_dir)
-
-    # Proposed by Dmitry 2021-02-04
-    prime_dec_list = [
-        # 2 small S-Boxes
-        (1030297, 101, [101, 101, 101]), # has 3 boxes. only 2 desired?
-        (12541, 107, [112, 112]),
-        # 3 small S-Boxes
-        (1295027, 109, [109, 109, 109]),
-        (1191013, 101, [106, 106, 106]),
-        # 4 small S-Boxes
-        (2248087, 131, [131, 131, 131]), # has 3 boxes. 4 desired?
-        (1003875853, 173, [178, 178, 178, 178]),
-        # 5 small S-Boxes
-        (51888844697, 139, [139, 139, 139, 139, 139]),
-        (210906087421, 179, [184, 184, 184, 184, 184]),
-    ]
-    # prime_dec_list = generate_prime_list(primes=[1030297, 12541, 1295027, 1191013, 2248087, 1003875853, 51888844697, 210906087421])
-    # prime_dec_list = generate_prime_list(base=10, lower_limit=2, upper_limit=5, min_v=0)
-    # prime_dec_list = [ (5701, 53, [84, 68]) ]
-    # prime_dec_list = generate_prime_list(primes=[727])
-
-    prime_dec_list = [
-        ( 47,  5, [ 7,  7]),
-        ( 61,  7, [ 8,  8]), # composition of [7, 7] is 63 ⇒ not a field element
-        ( 71,  7, [ 9,  8]),
-        ( 97,  7, [10, 10]),
-        (109,  7, [11, 10]),
-        (127,  7, [11, 12]),
-        (131,  7, [12, 11]),
-        (131, 11, [12, 11]), # composition of [11, 11] is 132 ⇒ not a field element
-        (167, 11, [13, 13]),
-    ]
-
-    prime_dec_list = [(10^6+3, v, [1003, 998]) for v in primes(212, 1000)]
+    pathlib.Path("./experiments").mkdir(parents=True, exist_ok=True)
 
     constants = [
         [3**100, 2**100, 5**50],
@@ -839,115 +967,68 @@ if __name__ == "__main__":
         [1, 1, 2],
     ])
 
-    if testing >= 2:
-        TestPlookupHash()
-        test_decomposeField()
-        test_interval_polynomial()
-        test_maybe_invert_by_v_poly()
-        test_decomposition_poly()
-        test_bar_poly_system()
-        test_conc_poly_system()
-        test_brick_poly_system()
-        test_conc_bar_conc_poly_system()
-        test_conc_bar_conc_rebound_prep_poly_system()
-        test_conc_bar_poly_system()
+    # Proposed by Dmitry 2021-02-04
+    prime_dec_list = [
+        # 2 small S-Boxes
+        (     1030297, 101, [101, 101, 101]), # has 3 boxes. only 2 desired?
+        (       12541, 107, [112, 112]),
+        # 3 small S-Boxes
+        (     1295027, 109, [109, 109, 109]),
+        (     1191013, 101, [106, 106, 106]),
+        # 4 small S-Boxes
+        (     2248087, 131, [131, 131, 131]), # has 3 boxes. 4 desired?
+        (  1003875853, 173, [178, 178, 178, 178]),
+        # 5 small S-Boxes
+        ( 51888844697, 139, [139, 139, 139, 139, 139]),
+        (210906087421, 179, [184, 184, 184, 184, 184]),
+    ]
+
+    # For Conc-Bars-Conc-Rebound-Prep
+    prime_dec_list = [
+        ( 47,  5, [ 7,  7]),
+        ( 61,  7, [ 8,  8]), # composition of [7, 7] is 63 ⇒ not a field element
+        ( 71,  7, [ 9,  8]),
+        ( 97,  7, [10, 10]),
+        (109,  7, [11, 10]),
+        (127,  7, [11, 12]),
+        (131,  7, [12, 11]),
+        (131, 11, [12, 11]), # composition of [11, 11] is 132 ⇒ not a field element
+        (167, 11, [13, 13]),
+    ]
+
+    # For Bars
+    prime_dec_list = [(10^6+3, v, [1003, 998]) for v in primes(3, 1000)]
 
     for prime, v, sboxes in prime_dec_list:
-        print(f"————————————————————————————")
-        print(f"p = {prime}, v = {v}, sboxes = {sboxes}")
-        s_box_f, f = None, f"x^(v-2) % v"
-        if box_type == 'random': s_box_f, f = random_s_box_f(v, degree=v, terms=2*v)
-        elif box_type == 'iden': s_box_f, f = (lambda x: x, 'ID')
-        if get_verbose() >= 2:
-            print(f"f in sbox = {f}")
+        s_box_f = get_s_box_f(box_type, v)
         ph = PlookupHash(prime, constants, mult_matrix, sboxes, v, s_box_f=s_box_f)
-        if testing:
-            # Do sboxes and prime correspond?
-            tmp = reduce(operator.mul, sboxes, 1)
-            assert tmp >= prime, f"[!] S-Boxes too restrictive: {tmp} < {prime}"
-            tmp = ph._compose([v]*len(sboxes))
-            assert tmp < prime, f"[!] [v,…,v] is no field element (potential collisions): {tmp} >= {prime}"
-            assert all([x >= v for x in ph._decompose(prime)]), f"For one of the decomposed parts, applying the f might cause an overflow."
-        time_sys = time()
-        # system = conc_bar_conc_rebound_prep_poly_system(prime, constants, mult_matrix, sboxes, ph._small_s_box, in_out_equal=False, use_relaxed_system=False)
-        system = bar_poly_system(prime, sboxes, ph._small_s_box)
-        #system = bar_relaxed_poly_system(prime, sboxes, ph._small_s_box)
-        time_sys = time() - time_sys
-        # [print(f"{p.degree()} – {len(p.coefficients())}") for p in system]
-        # [print(f"{p}") for p in system]
-        mac_bound = 1 + sum([p.degree() - 1 for p in system])
-        if get_verbose() >= 1: print(f"Macaulay bound: {mac_bound}")
-        if determine_is_regular_system:
-            is_reg_seq = is_regular_sequence_m2(system)
-            print(f"[!] System is regular (macaulay2): {is_reg_seq}")
-        if determine_is_regular_system and gb_engin == "magma":
-            is_reg_seq, reason = is_regular_sequence_magma(system, give_reason=True)
-            print(f"[!] System is regular (magma):     {is_reg_seq} because {reason}")
-        if compute_on_equivalent_random_system:
-            print(f"[!] Replacing actual system by a random (but similar) one.")
-            system = random_equivalent_system(system)
-        if compute_on_equivalent_random_system and determine_is_regular_system:
-            is_reg_seq = is_regular_sequence_m2(system)
-            print(f"[!] System is regular (macaulay2): {is_reg_seq}")
-        if compute_on_equivalent_random_system and determine_is_regular_system and gb_engin == "magma":
-            is_reg_seq, reason = is_regular_sequence_magma(system, give_reason=True)
-            print(f"[!] System is regular (magma):     {is_reg_seq} because {reason}")
-        if add_field_equations:
-            print(f"[!] Adding field equations.")
-            system += [var^prime - var for var in system[0].parent().gens()]
-        if get_verbose() >= 2: print(f"Using Gröbner basis computing engine '{gb_engin}'.")
-        num_equs = len(system)
-        num_vars = len(system[0].parent().gens())
-        if get_verbose() >= 0: print(f"Number of EQUS: {num_equs}")
-        if get_verbose() >= 0: print(f"Number of VARS: {num_vars}")
-        I = Ideal(system)
-        if num_equs > num_vars and get_verbose() >= 0:
-            print(f"Degree of Semi-Regularity:", I.degree_of_semi_regularity())
-        time_gb = time()
-        time_gb_process = process_time()
-        if gb_engin == 'magma':
-            magma.set_nthreads(8)
-            magma.set_verbose("Groebner", 4)
-            gb, degs = magma.GroebnerBasis(system, Faugere=True, nvals=2)
-            gb, degs = gb.sage(), degs.sage()
-            if not degs: degs = [None]
-            if get_verbose() >= 0: print(f"Maximum degree reached by magma: {max(degs)}")
-            if get_verbose() >= 0: print(f"We built this many matrices:     {len(degs)}")
-        if gb_engin == 'singular':
-            gb = Ideal(system).groebner_basis(algorithm="singular:std", prot=True)
-        if gb_engin == 'macaulay2':
-            gb = I.groebner_basis('macaulay2:f4', prot=True)
-        if gb_engin == 'sagef5':
-            gb = print_gb_analytics(system, verbosity=get_verbose(), write_to_disk=False, return_gb=True)
-        if gb_engin == 'fgb':
-            import fgb_sage
-            from stdout_redirector import stderr_redirector
-            with open(f'./fgb_dbg_(p={prime},v={v}).txt', 'w+b') as f, stderr_redirector(f):
-                gb = fgb_sage.groebner_basis(system, threads=8, verbosity=get_verbose())
-            degs, matrix_dims, _, _, _, _, error_msg = parse_fgb_debug(f'./fgb_dbg_(p={prime},v={v}).txt')
-            if not degs: degs = [None]
-            if get_verbose() >= 0: print(f"Maximum degree reached by FGb: {max(degs)}")
-            if get_verbose() >= 0: print(f"We built this many matrices:   {len(matrix_dims)}")
-            if get_verbose() >= 0: print(f"Biggest matrix we built:       {max(matrix_dims, key=lambda el: el[0]*el[1])}")
-            if get_verbose() >= 3: print(f"Dimensions of matrices in FGb: {matrix_dims}")
-            if error_msg and get_verbose() >= 0: print(f"Error message from FGb: {error_msg}")
-            gb = list(gb)
-        time_gb_process = process_time() - time_gb_process
-        time_gb = time() - time_gb
-        # [print(f"{p.degree()} – {len(p.coefficients())}") for p in gb]
-        I = Ideal(gb) # depending on the method, the GB did not get buffered in I
-        # if get_verbose() >= 1: print(f"Dimension of <system>: {I.dimension()}")
-        # if get_verbose() >= 2: print("Hilbert Series:", Ideal([f.homogenize() for f in system]).hilbert_series())
-        # if get_verbose() >= 2: print("Hilbert Polynomial:", Ideal([f.homogenize() for f in system]).hilbert_polynomial())
-        # if get_verbose() >= 2 and I.dimension() == 0:
-        #     print("Computing variety…")
-        #     v = I.variety()
-        #     print("Number of solutions:", len(v))
-        print(f"time sys: {time_sys}")
-        print(f"time gb:  {time_gb}")
-        # print(f"#non-zero coeffs: {sum([len(p.coefficients()) for p in gb])}")
-        # print(f"length of GB:     {len(gb)}")
-        sys.stdout.flush()
-        with open('plot_me.csv', 'a+') as plot_me:
-            plot_me.write(f"{v},{time_gb},{time_gb_process}\n")
+        if test_decomposition_for_collisions: test_decomposition_for_collisions(ph)
 
+        result_path = f"./experiments/{prime}_{v}_{gb_engin}_"
+        exp_time = time()
+        exp_time_process = process_time()
+        monitor = MemoryMonitor(result_path)
+        es = ExperimentStarter(result_path)
+        exp_process = Process(target=es, args=(system_type, prime, sboxes, ph._small_s_box, gb_engin))
+        exp_process.start()
+        if get_verbose() >= 2: print(f"Experiment process started… (p={prime}, v={v}, using {gb_engin})")
+
+        mem_parent_pipe, mem_child_pipe = Pipe()
+        mem_process = Process(target=monitor.measure_usage, args=(exp_process.pid, mem_child_pipe))
+        mem_process.start()
+        if get_verbose() >= 2: print(f"Memory measuring process started… (v={v})")
+
+        exp_process.join()
+        mem_process.join()
+        exp_time_process = process_time() - exp_time_process
+        exp_time = time() - exp_time
+        max_usage = int(mem_parent_pipe.recv())
+        with open(result_path + "summary.txt", 'a') as f:
+            f.write(f" –––\n")
+            f.write(f"total exp time:    {exp_time}\n")
+            f.write(f"total exp p_time:  {exp_time_process}\n")
+            f.write(f"max memory usage:  {max_usage} KiB\n")
+            f.write(f"           that's  {n(max_usage / 1024**2)} GiB\n")
+        with open('plot_me.csv', 'a+') as plot_me:
+            plot_me.write(f"{v},{exp_time},{exp_time_process},{max_usage}\n")
+        print()
