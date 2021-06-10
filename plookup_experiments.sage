@@ -999,6 +999,7 @@ if __name__ == "__main__":
     # For Bars
     prime_dec_list = [(10^6+3, v, [1003, 998]) for v in primes(3, 1000)]
 
+    # v here corresponds to v in HackMD but to p' in the Overleaf document
     for prime, v, sboxes in prime_dec_list:
         s_box_f = get_s_box_f(box_type, v)
         ph = PlookupHash(prime, constants, mult_matrix, sboxes, v, s_box_f=s_box_f)
