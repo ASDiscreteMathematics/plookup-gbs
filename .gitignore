@@ -1,0 +1,6 @@
+__pycache__/*
+experiments/**
+*.sage.py
+moving-v*.ods
+moving_v*.txt
+plot_me.csv
